@@ -3,7 +3,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, chat
+from app.api.routes import health, chat, auth, pfz, weather, hazards, risk, routes, geospatial
 
 log = structlog.get_logger()
 
@@ -20,9 +20,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(pfz.router, prefix="/api/v1/pfz", tags=["pfz"])
+app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
+app.include_router(hazards.router, prefix="/api/v1/hazards", tags=["hazards"])
+app.include_router(risk.router, prefix="/api/v1/risk", tags=["risk"])
+app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
+app.include_router(geospatial.router, prefix="/api/v1/geospatial", tags=["geospatial"])
 
 
 @app.get("/")
