@@ -9,12 +9,12 @@ router = APIRouter()
 _started = time.time()
 
 
-@router.get("/health")
+@router.get("/")
 async def health():
     return {"status": "ok", "service": "orca-backend", "uptime_seconds": int(time.time() - _started)}
 
 
-@router.get("/health/services")
+@router.get("/services")
 async def health_services(db: Session = Depends(get_db)):
     status_dict = {
         "postgres": "unknown",

@@ -22,7 +22,7 @@ class ChatResponse(BaseModel):
     request_id: str
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse)
 async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
     # M4 will wire orchestrator here. Stub for M0 verification.
     import uuid
@@ -34,7 +34,7 @@ async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
         request_id=str(uuid.uuid4()),
     )
 
-@router.post("/chat/stream")
+@router.post("/stream")
 async def chat_stream(req: ChatRequest, current_user = Depends(get_current_user)):
     import asyncio
     import json
