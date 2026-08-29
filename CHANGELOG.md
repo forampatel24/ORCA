@@ -55,3 +55,30 @@ Date: 2026-08-29
 ### Notes
 - Follows `05_DATABASE_DESIGN`, `20_DATABSE_ARCHITECTURE` - 5 stores: `PostgreSQL/PostGIS + Redis + MinIO + Qdrant` with correct responsibilities
 - All persistent data on `D:` (`docker_data.vhdx` + `D:\PostreSQL\data`), `C:` only binary
+
+---
+
+## Milestone 02 — Data Registry & Pipeline
+
+Date: 2026-08-29
+
+### Added
+- `app/services/ingestion/base.py` BaseConnector (`fetch`, `validate_source`, `get_metadata`, `provenance`) per `09_DATA_PIPELINE`
+- `app/services/ingestion/validation.py` (`VALID/SUSPECT/INVALID`, `PFZ_SCHEMA`, `WEATHER_SCHEMA`, coord/range/timestamp) + `normalization.py` (UTC ISO8601, EPSG:4326, `K->C`, `ingestion_time` distinct per `05:46`)
+- `app/services/ingestion/pipeline.py` IngestionPipeline (`Raw MinIO orca-raw-data -> Validation -> Normalization -> dedupe -> provenance -> Redis cache`) TTL `weather 1800, pfz 86400, hazard 600`
+- `app/services/ingestion/connectors/pfz_connector.py` (3 PFZ mock Mumbai), `weather_connector.py` (2 forecasts +6h/+24h)
+- `app/services/data_registry.py` DataRegistry (`INTENT_SOURCES`, `select_for_intent`, `check_freshness FRESH/AGING/STALE`) per `08_DATASET_REGISTRY`
+- `backend/test_m2.py` end-to-end verification
+
+### Tests
+- `DataRegistry` `select pfz_discovery -> INCOIS PFZ` OK
+- `IngestionPipeline PFZ 3/3 inserted, Weather 2/2 inserted` (after fix `forecast_time` in dedupe), `raw_stored` `raw/pfz/*.json`, `raw/weather/*.json` OK
+- `pfz_observations count 6` (3+3 run), `ingestion_runs` inserted, `MinIO raw objects 2`, `Redis cache hit` on second fetch (`ingestion_cache_hit`), `structlog` `ingestion_completed`
+
+### Fixed
+- Weather dedupe incorrectly collapsed `+6h`/`+24h` forecasts (added `forecast_time`+`wind_speed` to key in `pipeline.py:19`)
+
+### Notes
+- Follows `07_DATA_ARCHITECTURE`, `08_DATASET_REGISTRY`, `09_DATA_PIPELINE` - `RAW -> MinIO -> Validation -> Normalization -> Structured PostGIS -> Redis TTL -> Agent Tool`
+- Mock connectors ready to swap to real `INCOIS/IMD` `fetch()` in M3
+- All data still on `D:`

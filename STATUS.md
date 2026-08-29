@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 01 — Polyglot Storage Layer (M1) Completed** (M0 Foundation also completed)
+**Milestone 02 — Data Registry & Pipeline (M2) Completed**
 
 Date: 2026-08-29
 
@@ -28,21 +28,27 @@ Date: 2026-08-29
   - Qdrant `orca_knowledge` collection `size=384 Cosine, status green` created
   - Redis `orca:test:health set/get ok`
 
+- **M2: Data Registry & Pipeline**
+  - Base connector `app/services/ingestion/base.py:1` (`fetch`, `validate_source`, `get_metadata`, `provenance`) per `09_DATA_PIPELINE`
+  - Validation `app/services/ingestion/validation.py:1` (`VALID/SUSPECT/INVALID`, `PFZ_SCHEMA`, `WEATHER_SCHEMA`, coord/range/timestamp checks) + Normalization `normalization.py:1` (UTC ISO8601, EPSG:4326, `K->C`)
+  - Pipeline `pipeline.py:1` (`Raw MinIO -> Validation -> Normalization -> dedupe -> provenance -> Redis cache`) with TTL `weather 1800, pfz 86400, hazard 600` per `05:38`
+  - Connectors: `pfz_connector.py:1` (3 PFZ mock Mumbai), `weather_connector.py:1` (2 forecasts `+6h/+24h`) per `08_DATASET_REGISTRY`
+  - Registry `app/services/data_registry.py:1` (`INTENT_SOURCES` `pfz_discovery/safety/route/geofence`, `select_for_intent`, `check_freshness FRESH/AGING/STALE`)
+  - Verified end-to-end: `PFZ 3 inserted, Weather 2 inserted`, `pfz_observations count 6`, `ingestion_runs tracked`, `MinIO raw/pfz + raw/weather .json` stored, `Redis cache hit` on second fetch, `ingestion cache hit` logged via `structlog`
+
 ## Working
 
-- `docker compose up -d` brings `orca-redis`, `orca-qdrant`, `orca-minio` healthy on `D:`
-- `D:\PostreSQL` `5432` `PostGIS` spatial queries work (`ST_DWithin`, `ST_Contains`, `ST_Distance`)
-- MinIO buckets reachable, Qdrant vector store ready for `FastEmbed bge-small-en 384`
-- Backend skeleton compiles (`py_compile` OK), frontend scaffold ready
-- All storage on `D:`: `D:\Docker\DockerDesktopWSL` + `D:\PostreSQL\data` + `D:\Foram_TP\ORCA\data`
+- `docker compose up -d` `orca-*` healthy on `D:`, `IngestionPipeline` `Raw->MinIO->Validation->Normalization->PostGIS->Redis` working
+- `D:\PostreSQL` `pfz_observations 6 rows`, `ingestion_runs` tracking, `data_registry` `select_for_intent` `pfz_discovery -> INCOIS PFZ`
+- MinIO `raw/pfz/*.json`, `raw/weather/*.json` stored, Qdrant ready, Redis `orca:pfz:*`/`orca:weather:*` TTL cached
+- Backend pipeline verified `test_m2.py:1` `PFZ 3 + Weather 2`, `structlog` `ingestion_completed`
 
 ## In Progress
 
-- M2 Data Registry & Pipeline (next)
+- M3 Backend API Layer (next)
 
 ## Pending
 
-- M2 Data Registry & Pipeline
 - M3 Backend API Layer (`/api/v1/chat`, auth, health/services)
 - M4 Orchestration (LangGraph)
 - M5 Agents + Tools
@@ -56,13 +62,14 @@ Date: 2026-08-29
 
 ## Known Issues
 
-- MinIO default `9000/9001` blocked by Windows `excludedportrange 8947-9046` - mitigated via `9100/9101` (see `docker-compose.yml:22`)
-- `fastapi` not yet installed in host `venv` - scaffold only, `uvicorn` not yet running (will be in M3)
-- No real datasets loaded yet - only registry + empty tables (M2 will populate)
+- MinIO `9000` blocked -> `9100` fixed (see `docker-compose.yml:22`)
+- Weather mock dedupe needed `forecast_time` in key (fixed `pipeline.py:19`)
+- Live INCOIS/IMD fetch still mock - swap to real `fetch()` in pipeline after `M3` (real APIs require network)
+- `fastapi` not yet running as service (M3)
 
 ## Next Milestone
 
-**M2: Data Registry & Pipeline** - implement `data_sources` connector abstraction, ingestion validation/normalization, `ingestion_runs` tracking, Redis TTL caching
+**M3: Backend API Layer** - FastAPI `12_API_SPEC` `/api/v1/health, /chat, /pfz, /weather, /ocean, /geofences, /risk, /routes` + Pydantic, Service->Repository, JWT, streaming
 
 ## Architecture Status
 
