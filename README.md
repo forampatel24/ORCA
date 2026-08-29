@@ -923,16 +923,19 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **Development has not yet progressed into the implementation milestones.**
+> **M0 Foundation & M1 Polyglot Storage Completed — 2026-08-29**
 
-The architecture and development documentation have been established.
+Working:
+- `docker compose up -d` on `D:` (`D:\Docker\DockerDesktopWSL\disk\docker_data.vhdx` 2.17GB, not `C:`) -> `orca-redis :6379 healthy`, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows reserved 8947-9046)
+- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` with 20 tables (`users`, `conversations`, `agent_runs`, `pfz_observations`, `geofences` etc.) GIST indexes, seed `6 data_sources`, spatial `ST_Contains` verified
+- `MinIO` 6 buckets `orca-documents/raw-data/satellite/raster/processed/artifacts` on `localhost:9100`, `Qdrant` `orca_knowledge` `384 Cosine green`, `Redis` `PONG`
+- Backend skeleton `FastAPI + Pydantic + SQLAlchemy` compiles, frontend `React 18 + Vite + Tailwind + MapLibre placeholder` scaffolded
 
-The next stage is to begin implementing the ORCA foundation and development
-environment.
+Next: `M2 Data Registry & Pipeline` (connectors, validation, ingestion_runs, Redis TTL)
 
 See:
 
-* `STATUS.md` for the current implementation state.
+* `STATUS.md` for current implementation state.
 * `CHANGELOG.md` for milestone history.
 * `AGENTS.md` for development rules.
 * `/docs` for detailed architecture specifications.
@@ -941,28 +944,35 @@ See:
 
 # Quick Start
 
-> This section will be updated as implementation progresses.
-
-The intended local development workflow will eventually be:
+Verified on Windows 11 + Docker Desktop (data on `D:\Docker\DockerDesktopWSL`):
 
 ```bash
-# Clone the repository
+# 1. Clone
+git clone <repo> && cd ORCA
 
-# Configure environment variables
+# 2. Configure (creates backend/.env too)
 cp .env.example .env
+cp .env.example backend/.env
+# set LLM_API_KEY in .env if using agents (M4+)
 
-# Start infrastructure
+# 3. Start infrastructure (all data stays on D:)
 docker compose up -d
+docker ps  # orca-redis, orca-qdrant, orca-minio healthy
 
-# Start backend
-# backend-specific commands will be documented here
+# 4. Verify storage (native PostgreSQL D:\PostreSQL)
+$env:PGPASSWORD="postgres"
+& "D:\PostreSQL\bin\psql.exe" -U postgres -h localhost -p 5432 -d orca_db -c "SELECT PostGIS_Version();"
+python -c "from minio import Minio; print(Minio('localhost:9100', 'minioadmin','minioadmin', secure=False).list_buckets())"
+curl http://localhost:6333/healthz
+docker exec orca-redis redis-cli ping  # PONG
 
-# Start frontend
-# frontend-specific commands will be documented here
+# 5. Backend (M3 will add uvicorn run)
+python -m py_compile backend/app/main.py  # scaffold compiles
+# pip install -e backend && uvicorn app.main:app --reload --port 8000  (M3)
+
+# 6. Frontend (M9 will add full map)
+cd frontend && npm install && npm run dev  # http://localhost:5173
 ```
-
-Exact commands will only be added after they have been implemented and
-verified.
 
 ---
 
@@ -1058,10 +1068,10 @@ License information will be added before public release.
 
 # Project Status
 
-**Architecture:** Defined
+**Architecture:** Defined (20 docs frozen)
 **Documentation:** Defined
-**Implementation:** In Progress
-**Prototype:** Not yet reached
+**Implementation:** M0 + M1 Completed (Foundation + Polyglot Storage on D:)
+**Prototype:** Not yet reached (M2-M9 pending)
 **Production:** Not yet reached
 
 ---
