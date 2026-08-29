@@ -1,0 +1,50 @@
+# Environment
+.env
+.venv/
+venv/
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# Node
+node_modules/
+dist/
+.env.local
+
+# Data / large objects
+data/raw/
+data/processed/
+data/external/
+data/temporary/
+*.vhdx
+
+# Docker volumes
+qdrant_storage/
+minio_data/
+redis_data/
+
+# MinIO
+minio-data/
+
+# Qdrant
+qdrant_storage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
