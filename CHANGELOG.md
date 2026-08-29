@@ -82,3 +82,40 @@ Date: 2026-08-29
 - Follows `07_DATA_ARCHITECTURE`, `08_DATASET_REGISTRY`, `09_DATA_PIPELINE` - `RAW -> MinIO -> Validation -> Normalization -> Structured PostGIS -> Redis TTL -> Agent Tool`
 - Mock connectors ready to swap to real `INCOIS/IMD` `fetch()` in M3
 - All data still on `D:`
+
+---
+
+## Milestone 03 — Backend API Layer
+
+Date: 2026-08-29
+
+### Added
+- `backend/app/api/routes` completed with routers for `health`, `auth`, `chat`, `pfz`, `weather`, `hazards`, `risk`, `routes`, `geospatial`.
+- `backend/app/database/repositories` base and specific repos for users, PFZ, weather, and hazards.
+- `backend/app/schemas` Pydantic models for request/response serialization across endpoints.
+- JWT Authentication and RBAC via `security.py` and `deps.py`.
+- Service health endpoint `/api/v1/health/services` that live pings PostgreSQL, Redis, Qdrant, and MinIO.
+- Real-time chat streaming endpoint via `StreamingResponse`.
+
+### Tests
+- `/api/v1/health/services` successfully connected to all four databases simultaneously.
+- Routers successfully wired and verified in `main.py`.
+
+---
+
+## Milestone 04 — Orchestration Core
+
+Date: 2026-08-29
+
+### Added
+- LangGraph orchestration application inside `backend/app/agents/orchestrator`.
+- `state.py` for shared `OrcaState` (intent, plan, agent_results).
+- `schemas.py` for LLM structured output parsing (`IntentInterpretation`, `TaskPlan`).
+- `nodes.py` defining the graph workflow (`analyze_intent`, `planner`, `execute_agents`, `synthesize`).
+- `graph.py` compiling the StateGraph.
+- Lazy-loading of `ChatOpenAI` LLM initialization to prevent `FastAPI` startup crashes without an `OPENAI_API_KEY`.
+- Directly wired orchestrator events to `/api/v1/chat/stream`.
+
+### Tests
+- Simulated execution flow successfully steps through Intent -> Plan -> Execute -> Synthesize.
+- Fallback import test confirmed no crashes without `OPENAI_API_KEY`.

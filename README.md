@@ -923,16 +923,16 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0 Foundation + M1 Storage + M2 Pipeline Completed — 2026-08-29**
+> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator Completed — 2026-08-29**
 
 Working:
 - `docker compose up -d` on `D:` (`D:\Docker\DockerDesktopWSL\disk\docker_data.vhdx` 2.17GB, not `C:`) -> `orca-redis :6379 healthy`, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows reserved 8947-9046)
 - `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `ST_Contains` verified, `pfz_observations 6 rows`
 - `IngestionPipeline` `Raw MinIO -> Validation -> Normalization -> PostGIS -> Redis TTL` working: `PFZ 3/3`, `Weather 2/2` via `PFZConnector`/`WeatherConnector`, `MinIO raw/pfz/*.json`, `Redis cache hit`, `ingestion_runs` tracked
-- `MinIO` 6 buckets on `localhost:9100`, `Qdrant` `orca_knowledge` `384 Cosine green`, `Redis` `PONG`
-- Backend `FastAPI + Pydantic + SQLAlchemy + structlog` compiles, frontend `React 18 + Vite + Tailwind + MapLibre placeholder` scaffolded
+- Backend `FastAPI + Pydantic + SQLAlchemy` running and successfully connecting to all polyglot stores (verified via `/api/v1/health/services`).
+- LangGraph Orchestrator (M4) successfully built and wired into `/api/v1/chat` (requires `OPENAI_API_KEY` in `.env`).
 
-Next: `M3 Backend API Layer` (`/api/v1/health, /chat, /pfz, /weather` + JWT/streaming)
+Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
 
 See:
 
@@ -954,7 +954,7 @@ git clone <repo> && cd ORCA
 # 2. Configure (creates backend/.env too)
 cp .env.example .env
 cp .env.example backend/.env
-# set LLM_API_KEY in .env if using agents (M4+)
+# set OPENAI_API_KEY in backend/.env for Orchestrator (M4)
 
 # 3. Start infrastructure (all data stays on D:)
 docker compose up -d
@@ -967,12 +967,12 @@ python -c "from minio import Minio; print(Minio('localhost:9100', 'minioadmin','
 curl http://localhost:6333/healthz
 docker exec orca-redis redis-cli ping  # PONG
 
-# 4b. Verify M2 pipeline
-python backend/test_m2.py  # PFZ 3/3 Weather 2/2 -> MinIO raw + PostGIS + Redis cache
-
-# 5. Backend (M3 will add uvicorn run)
-python -m py_compile backend/app/main.py  # scaffold compiles
-# pip install -e backend && uvicorn app.main:app --reload --port 8000  (M3)
+# 5. Start Backend API (M3 & M4)
+cd backend
+.venv\Scripts\activate
+uvicorn app.main:app --reload --port 8000
+# Verify connection to all databases:
+# curl http://127.0.0.1:8000/api/v1/health/services
 
 # 6. Frontend (M9 will add full map)
 cd frontend && npm install && npm run dev  # http://localhost:5173
@@ -1074,8 +1074,8 @@ License information will be added before public release.
 
 **Architecture:** Defined (20 docs frozen)
 **Documentation:** Defined
-**Implementation:** M0 + M1 + M2 Completed (Foundation + Storage + Pipeline on D:)
-**Prototype:** Not yet reached (M3-M9 pending)
+**Implementation:** M0 + M1 + M2 + M3 + M4 Completed (Foundation + Storage + Pipeline + API + Orchestrator)
+**Prototype:** Not yet reached (M5-M9 pending)
 **Production:** Not yet reached
 
 ---

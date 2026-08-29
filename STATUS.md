@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 02 — Data Registry & Pipeline (M2) Completed**
+**Milestone 04 — Orchestration Core (M4) Completed**
 
 Date: 2026-08-29
 
@@ -36,21 +36,33 @@ Date: 2026-08-29
   - Registry `app/services/data_registry.py:1` (`INTENT_SOURCES` `pfz_discovery/safety/route/geofence`, `select_for_intent`, `check_freshness FRESH/AGING/STALE`)
   - Verified end-to-end: `PFZ 3 inserted, Weather 2 inserted`, `pfz_observations count 6`, `ingestion_runs tracked`, `MinIO raw/pfz + raw/weather .json` stored, `Redis cache hit` on second fetch, `ingestion cache hit` logged via `structlog`
 
+- **M3: Backend API Layer**
+  - FastAPI routers (`/api/v1/health`, `/api/v1/auth`, `/api/v1/chat`, `/api/v1/pfz`, `/api/v1/weather`, `/api/v1/hazards`, `/api/v1/risk`, `/api/v1/routes`, `/api/v1/geospatial`).
+  - Repository pattern implemented (`user_repo`, `pfz_repo`, `weather_repo`, `hazard_repo`).
+  - JWT Authentication + RBAC implemented in `security.py` and `deps.py`.
+  - `/api/v1/health/services` correctly queries and returns 'healthy' for Postgres, Redis, Qdrant, and MinIO.
+  - Streaming support via `StreamingResponse` added for `/chat/stream`.
+
+- **M4: Orchestration Core**
+  - LangGraph state machine implemented (`OrcaState`, `analyze_intent`, `planner`, `execute_agents`, `synthesize`).
+  - Pydantic models for structured LLM planning (`IntentInterpretation`, `TaskPlan`).
+  - Lazy LLM loading (gpt-4o-mini) to prevent API crashes if `OPENAI_API_KEY` is missing.
+  - Graph wired into `POST /api/v1/chat` and `POST /api/v1/chat/stream`.
+
 ## Working
 
 - `docker compose up -d` `orca-*` healthy on `D:`, `IngestionPipeline` `Raw->MinIO->Validation->Normalization->PostGIS->Redis` working
 - `D:\PostreSQL` `pfz_observations 6 rows`, `ingestion_runs` tracking, `data_registry` `select_for_intent` `pfz_discovery -> INCOIS PFZ`
 - MinIO `raw/pfz/*.json`, `raw/weather/*.json` stored, Qdrant ready, Redis `orca:pfz:*`/`orca:weather:*` TTL cached
-- Backend pipeline verified `test_m2.py:1` `PFZ 3 + Weather 2`, `structlog` `ingestion_completed`
+- FastAPI Backend correctly connects to all polyglot stores and serves endpoints.
+- LangGraph Orchestrator can successfully parse intents and construct execution plans.
 
 ## In Progress
 
-- M3 Backend API Layer (next)
+- M5 Specialized Agents + Tools (next)
 
 ## Pending
 
-- M3 Backend API Layer (`/api/v1/chat`, auth, health/services)
-- M4 Orchestration (LangGraph)
 - M5 Agents + Tools
 - M6 Risk/Route engines
 - M7 Static GIS datasets (EEZ subset)
@@ -65,11 +77,11 @@ Date: 2026-08-29
 - MinIO `9000` blocked -> `9100` fixed (see `docker-compose.yml:22`)
 - Weather mock dedupe needed `forecast_time` in key (fixed `pipeline.py:19`)
 - Live INCOIS/IMD fetch still mock - swap to real `fetch()` in pipeline after `M3` (real APIs require network)
-- `fastapi` not yet running as service (M3)
+- `OPENAI_API_KEY` must be set in `.env` for M4 Orchestrator planning to complete execution.
 
 ## Next Milestone
 
-**M3: Backend API Layer** - FastAPI `12_API_SPEC` `/api/v1/health, /chat, /pfz, /weather, /ocean, /geofences, /risk, /routes` + Pydantic, Service->Repository, JWT, streaming
+**M5: Specialized Agents + Tools** - Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents + deterministic PostGIS/Shapely tools, structured I/O.
 
 ## Architecture Status
 
