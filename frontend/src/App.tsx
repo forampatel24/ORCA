@@ -22,7 +22,7 @@ export default function App() {
       </header>
       <div className="grid grid-cols-2 gap-4 p-4">
         <div className="border border-slate-800 rounded p-4">
-          <h2 className="font-semibold mb-2">Chat (M0 stub -> M4 orchestrator)</h2>
+          <h2 className="font-semibold mb-2">Chat (M0 stub -&gt; M4 orchestrator)</h2>
           <div className="flex gap-2">
             <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Is it safe to fish tomorrow near Mumbai?" className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2" />
             <button onClick={send} className="bg-blue-600 px-4 py-2 rounded">Send</button>
