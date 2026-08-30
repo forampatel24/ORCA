@@ -176,3 +176,20 @@ Date: 2026-08-30
 
 ### Tests
 - maritime 1 + protected 2 + geofences 2 + cmfri 8 EEZ contains Mumbai true
+
+---
+
+## Milestone 08 - RAG Layer
+
+Date: 2026-08-30
+
+### Added
+- app/rag/chunking.py 700/100 + ingestion.py MinIO->PyMuPDF->FastEmbed 384->Qdrant + retrieval.py rerank + citation
+- 4 docs 6 chunks Qdrant 6 MinIO 4 PG docs 4 chunks 6 verified
+- app/tools/rag.py delegates to retrieve, app/agents/rag/agent.py uses real RAG
+
+### Tests
+- wind risk 0.775 MPA 0.68 PFZ 0.674 cyclone 0.753 citation verified
+
+### Fixed
+- Qdrant 1.19 vs 1.13 check_compatibility=False, query_points API, chunking 3 chunks for long manual

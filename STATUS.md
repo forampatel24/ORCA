@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 07 — Static GIS Datasets (M7) Completed**
+**Milestone 08 — RAG Layer (M8) Completed**
 
 Date: 2026-08-30
 
@@ -63,23 +63,28 @@ Date: 2026-08-30
 - **M7: Static GIS Datasets (08_DATASET_REGISTRY)**
   - `data/external/eez_india.geojson:1` `India EEZ Polygon 68,8-75,24` -> `maritime_boundaries 1` `ST_Contains Mumbai true`, `mpa_india.geojson:1` `Gulf of Mannar 78,8.5-79.5,9.5 + Malvan 73.3,16.0` -> `protected_areas 2` `ST_Contains Gulf true`
   - `coastline_india.geojson:1` `Maharashtra Line 72.5,18.5-73.0,20.0` -> `geofences 2` (Test MPA + `Maharashtra Coastline 5km buffer` `ST_Buffer`), `data/external/cmfri_landings.csv:8` `2020-2023 Maharashtra/Gujarat` -> `cmfri_landings 8` `12500->7100 decline`
-  - `data/processed/bathymetry_sample.tif` `80 bytes` mock GEBCO 2026 subset `10x10 depth -100 to -20` -> `MinIO orca-raster/bathymetry/gebco_subset_sample.tif` (rasterio PROJ mismatch avoided via dummy file)
+  - `data/processed/bathymetry_sample.tif` `442 bytes` real GeoTIFF `10x10` `EPSG:4326` (after `PROJ_LIB` fix) -> `MinIO orca-raster/bathymetry/gebco_subset_sample.tif`
   - `scripts/ingest_m7.py:1` + `test_m7_verify.py:1` verified `ST_DWithin 10km coastline true`, `ST_Contains EEZ/MPA true`, `GIST` indexes `idx_maritime_geom` etc. already from M1, altered `maritime_boundaries` to `GEOMETRY(GEOMETRY,4326)` to allow Polygon
+
+- **M8: RAG Layer (10_RAG_ARCHITECTURE)**
+  - `app/rag/chunking.py:1` `chunk_text 700/100` `clean_text`, `app/rag/ingestion.py:1` `MinIO orca-documents -> PyMuPDF (fitz 1.28.2) -> chunk -> FastEmbed BGE-small-en-v1.5 384 -> Qdrant orca_knowledge + PG knowledge_documents/chunks` idempotent
+  - `app/rag/retrieval.py:1` `retrieve top_k 5 -> rerank top_n 3` `cosine` `citation source/title#chunk`, `app/tools/rag.py:1` delegates to `retrieve`, `app/agents/rag/agent.py:1` uses `tools/rag`
+  - Ingested `4 docs` `incois_advisory_2026.txt 1 chunk + pfz_advisory_2026.pdf 1 chunk (PyMuPDF) + comprehensive_safety_manual.txt 3 chunks (700/100) + marine_safety_guideline.txt 1 chunk` `=6 chunks` `MinIO orca-documents 4 objects` `Qdrant 6 points` `PG docs 4 chunks 6`
+  - Retrieval `wind risk 15 -> safety/comprehensive#chunk0 0.775`, `MPA buffer -> safety/marine 0.68`, `PFZ SST -> pfz_advisory 0.674`, `rag_agent` real `INCOIS High Wind 18-22 m/s` `citation`
 
 ## Working
 
-- `docker compose up -d` `orca-*` 30h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200` `POST /api/v1/chat 1114 chars` `M5/M6 Synthesis MODERATE` `pfz_observations 6 rows`
-- `M6 engines` `risk LOW 0 MOD 25 HIGH 95 VERY_HIGH 165` `pfz 0.776` `sst +1.5` `haversine 33.43` `route cost 0.359` + `M7 GIS` `maritime 1 EEZ + protected 2 MPA + geofences 2 + cmfri 8` `ST_Contains true` `ST_DWithin 10km true` `MinIO raster/bathymetry`
-- `GET /pfz/nearest 4 items 15.2km`, `geospatial inside Test MPA distance 0.0`, `risk HIGH 70` `VERY_HIGH` cyclone, `cmfri Maharashtra 12500->7100 decline`
+- `docker compose up -d` `orca-*` 31h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200` `POST /api/v1/chat 1114 chars` `pfz_observations 6 rows`
+- `M6 engines` `risk VERY_HIGH 165` `pfz 0.776` `sst +1.5` `haversine 33.43` + `M7 GIS` `maritime 1 + protected 2 + geofences 2 + cmfri 8` `ST_Contains true` + `M8 RAG` `4 docs 6 chunks Qdrant 6 MinIO 4` `retrieval 0.775 wind` `citation`
+- `GET /pfz/nearest 4 items 15.2km`, `check_geofence inside Test MPA 0.0`, `cmfri 12500->7100`, `rag INCOIS 18-22 m/s`
 
 ## In Progress
 
-- M8 RAG Layer (next)
+- M9 Frontend Command Center (next)
 
 ## Pending
 
-- M8 RAG ingestion
-- M8 RAG ingestion
+- M9 Frontend Map+Chat
 - M9 Frontend Map+Chat
 - M10 Conversational
 - M11 Security
@@ -97,7 +102,7 @@ Date: 2026-08-30
 
 ## Next Milestone
 
-**M8: RAG Layer** - `PyMuPDF -> chunk 500-1000 -> FastEmbed BGE-small 384 -> Qdrant orca_knowledge` + `knowledge_documents` per `10_RAG_ARCHITECTURE` (already 2 docs, need full pipeline)
+**M9: Frontend Command Center** - `React+TS+Vite+MapLibre+ECharts` `TanStack+Zustand` `chat+map sync` per `13_FRONTEND_ARCHITECTURE`
 
 ## Architecture Status
 

@@ -1,0 +1,15 @@
+ORCA Marine Safety Comprehensive Manual 2026
+Chapter 1: Wind and Wave Hazards
+Wind speed above 15 m/s indicates HIGH risk. Fishermen should avoid sea when wind exceeds 15 m/s. Wave height above 2.5m is dangerous. Combined wind and wave increase capsize risk. Historical data shows 70% incidents occur with wind >15 and wave >2.5. Always check INCOIS Ocean State Forecast before departure.
+
+Chapter 2: Lightning and Cyclone
+Lightning within 50km radius requires immediate return to shore. Cyclone warnings from IMD must be treated as VERY_HIGH risk. Even distant cyclones 200km away can generate swell. Monitor IMD cyclone track every 3 hours. Do not rely solely on visual cues.
+
+Chapter 3: Geofencing and Protected Areas
+Marine Protected Areas (MPA) like Gulf of Mannar and Malvan are ecologically sensitive. Entry without permission is prohibited. Maintain 5km buffer from MPA boundaries. International Maritime Boundary Line (IMBL) crossing triggers alert. Use ORCA geospatial check before routing.
+
+Chapter 4: PFZ and Productivity
+Potential Fishing Zones are derived from SST 27-29C and chlorophyll 0.5-1.5 mg/m3. PFZ does not guarantee catch but indicates ocean suitability. Always correlate PFZ with safety - HIGH PFZ suitability with VERY_HIGH risk = AVOID. ORCA PFZ scoring uses weighted ocean 0.3 + environment 0.2 + safety 0.35.
+
+Chapter 5: Emergency Procedures
+In case of engine failure, anchor and send distress via ORCA alert. Keep VHF radio on channel 16. Share location every 30 minutes. This manual is authoritative for ORCA RAG retrieval.
