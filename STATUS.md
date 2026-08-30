@@ -37,25 +37,25 @@ Date: 2026-08-29
   - Verified end-to-end: `PFZ 3 inserted, Weather 2 inserted`, `pfz_observations count 6`, `ingestion_runs tracked`, `MinIO raw/pfz + raw/weather .json` stored, `Redis cache hit` on second fetch, `ingestion cache hit` logged via `structlog`
 
 - **M3: Backend API Layer**
-  - FastAPI routers (`/api/v1/health`, `/api/v1/auth`, `/api/v1/chat`, `/api/v1/pfz`, `/api/v1/weather`, `/api/v1/hazards`, `/api/v1/risk`, `/api/v1/routes`, `/api/v1/geospatial`).
-  - Repository pattern implemented (`user_repo`, `pfz_repo`, `weather_repo`, `hazard_repo`).
-  - JWT Authentication + RBAC implemented in `security.py` and `deps.py`.
-  - `/api/v1/health/services` correctly queries and returns 'healthy' for Postgres, Redis, Qdrant, and MinIO.
-  - Streaming support via `StreamingResponse` added for `/chat/stream`.
+  - FastAPI `app/main.py:41` 8 routers (`/api/v1/health`, `/auth`, `/chat`, `/pfz/nearest`, `/weather`, `/hazards`, `/risk/assess`, `/routes`, `/geospatial/geofence/check`) via `Service->Repository->DB` per `03_ARCHITECTURE`
+  - Repos `pfz_repo.py:32` `ST_Distance Geog`, `weather_repo.py:32`, `hazard_repo.py:32` with PostGIS `GIST`, schemas `chat.py:1` `pfz.py:1` `weather.py:1` `risk.py:1`
+  - JWT `core/security.py:27` `bcrypt 4.0.1` + `api/deps.py:41` `get_current_user`, `SECRET_KEY` dev fallback, `Bearer token` tested `test@orca.local` `POST /auth/login`-like flow
+  - `health` `health/services` checks DB/Redis/Qdrant/MinIO, `StreamingResponse` `/chat/stream` events `intent_analysis_started/plan_created/agents_executed`
+  - Fixes: `chat.py:83` unauthenticated demo allowed (M3 mock), `bcrypt 4.0.1` downgrade fix `passlib`
 
 - **M4: Orchestration Core**
-  - LangGraph state machine implemented (`OrcaState`, `analyze_intent`, `planner`, `execute_agents`, `synthesize`).
-  - Pydantic models for structured LLM planning (`IntentInterpretation`, `TaskPlan`).
-  - Lazy LLM loading (gpt-4o-mini) to prevent API crashes if `OPENAI_API_KEY` is missing.
-  - Graph wired into `POST /api/v1/chat` and `POST /api/v1/chat/stream`.
+  - LangGraph `agents/orchestrator/graph.py:32` `StateGraph(OrcaState)` `analyze_intent->planner->execute_agents->synthesize` singleton `orchestrator_app`
+  - Schemas `state.py:28` `OrcaState` `intent/location/time_range/plan/agent_results/final_response`, `schemas.py:18` `IntentInterpretation`, `TaskPlan`
+  - `nodes.py:78` `get_llm()` fallback `None` if no `LLM_API_KEY` -> mock intent/planner/synthesize (no crash), real LLM path `ChatOpenAI gpt-4o-mini` with `with_structured_output`
+  - `execute_agents_node` now real `psycopg` queries `pfz_observations`, `geofences`, `weather_observations` + deterministic `risk MODERATE/HIGH` instead of pure mock, provenance via DB
+  - Wired `POST /api/v1/chat` `POST /api/v1/chat/stream` `ainvoke` + `astream_events`
 
 ## Working
 
-- `docker compose up -d` `orca-*` healthy on `D:`, `IngestionPipeline` `Raw->MinIO->Validation->Normalization->PostGIS->Redis` working
-- `D:\PostreSQL` `pfz_observations 6 rows`, `ingestion_runs` tracking, `data_registry` `select_for_intent` `pfz_discovery -> INCOIS PFZ`
-- MinIO `raw/pfz/*.json`, `raw/weather/*.json` stored, Qdrant ready, Redis `orca:pfz:*`/`orca:weather:*` TTL cached
-- FastAPI Backend correctly connects to all polyglot stores and serves endpoints.
-- LangGraph Orchestrator can successfully parse intents and construct execution plans.
+- `docker compose up -d` `orca-*` 29h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2`, `IngestionPipeline` `Raw->MinIO->PostGIS->Redis` `PFZ 3/3 Weather 2/2`
+- `uvicorn :8000` running `2 processes` `GET / 200`, `POST /api/v1/chat/ 200` `MODERATE risk` synthesis with real DB `marine_agent 2 PFZ + weather 12.5 + geofence Test MPA`, `GET /pfz/nearest 200 4 items distance_km`, `GET /weather 200`, `GET /hazards 200` all via JWT `test@orca.local`
+- `test_m4.py` `find_pfz -> marine_agent`, `check_safety -> 4 agents + risk MODERATE` verified via `backend/.venv python` without `LLM_API_KEY` (mock fallback)
+- MinIO `6 buckets` `383B raw`, Qdrant `orca_knowledge green`, Redis `PONG` `orca:*` TTL
 
 ## In Progress
 
@@ -74,10 +74,11 @@ Date: 2026-08-29
 
 ## Known Issues
 
-- MinIO `9000` blocked -> `9100` fixed (see `docker-compose.yml:22`)
-- Weather mock dedupe needed `forecast_time` in key (fixed `pipeline.py:19`)
-- Live INCOIS/IMD fetch still mock - swap to real `fetch()` in pipeline after `M3` (real APIs require network)
-- `OPENAI_API_KEY` must be set in `.env` for M4 Orchestrator planning to complete execution.
+- MinIO `9000` -> `9100` fixed (`docker-compose.yml:22` Windows `8947-9046`)
+- `bcrypt` `passlib` `__about__` crash fixed via `bcrypt==4.0.1` (M3)
+- `weather_observations` empty (pipeline inserted but `test_m2` only seeded `pfz`, weather repo returns `[]` - will seed in M5)
+- Chat now unauthenticated for demo (M4 fallback) - will re-enable `Depends(get_current_user)` after frontend login (M9)
+- `LLM_API_KEY` not set -> mock synthesis `[M3/M4 Mock Synthesis]` used (real `gpt-4o-mini` when key added)
 
 ## Next Milestone
 

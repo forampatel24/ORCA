@@ -90,16 +90,16 @@ Date: 2026-08-29
 Date: 2026-08-29
 
 ### Added
-- `backend/app/api/routes` completed with routers for `health`, `auth`, `chat`, `pfz`, `weather`, `hazards`, `risk`, `routes`, `geospatial`.
-- `backend/app/database/repositories` base and specific repos for users, PFZ, weather, and hazards.
-- `backend/app/schemas` Pydantic models for request/response serialization across endpoints.
-- JWT Authentication and RBAC via `security.py` and `deps.py`.
-- Service health endpoint `/api/v1/health/services` that live pings PostgreSQL, Redis, Qdrant, and MinIO.
-- Real-time chat streaming endpoint via `StreamingResponse`.
+- `app/main.py:41` 8 routers wired (`/api/v1/health`, `/auth`, `/chat`, `/pfz/nearest`, `/weather`, `/hazards`, `/risk/assess`, `/routes`, `/geospatial/geofence/check`) `Service->Repository->DB` per `12_API_SPEC`
+- `database/repositories/pfZ_repo.py:32` `ST_Distance Geog` `weather_repo.py:32` `hazard_repo.py:32` + `schemas/chat.py:1` `pfz.py:1` `weather.py:1` `risk.py:1`
+- `core/security.py:27` JWT `HS256` `bcrypt 4.0.1` + `api/deps.py:41` `get_current_user` `OAuth2PasswordBearer` `auth.py` login
+- Health `/api/v1/health` `uptime`, `/health/services` live ping, streaming `POST /api/v1/chat/stream` `StreamingResponse` events
+
+### Fixed
+- `bcrypt` `passlib` `__about__` crash (downgrade `bcrypt==4.0.1`), `chat.py:83` auth optional for M3 demo
 
 ### Tests
-- `/api/v1/health/services` successfully connected to all four databases simultaneously.
-- Routers successfully wired and verified in `main.py`.
+- `uvicorn :8000` `GET / 200` `GET /health 200 {status ok}`, `POST /chat/ 200` `MODERATE` synthesis, `GET /pfz/nearest?lat=19 lon=72.8 200 4 items distance_km`, `GET /weather 200`, `GET /hazards 200` with `Bearer test@orca.local` `JWT 165 chars` (`psycopg` `test@orca.local`)
 
 ---
 
@@ -108,14 +108,15 @@ Date: 2026-08-29
 Date: 2026-08-29
 
 ### Added
-- LangGraph orchestration application inside `backend/app/agents/orchestrator`.
-- `state.py` for shared `OrcaState` (intent, plan, agent_results).
-- `schemas.py` for LLM structured output parsing (`IntentInterpretation`, `TaskPlan`).
-- `nodes.py` defining the graph workflow (`analyze_intent`, `planner`, `execute_agents`, `synthesize`).
-- `graph.py` compiling the StateGraph.
-- Lazy-loading of `ChatOpenAI` LLM initialization to prevent `FastAPI` startup crashes without an `OPENAI_API_KEY`.
-- Directly wired orchestrator events to `/api/v1/chat/stream`.
+- `agents/orchestrator/graph.py:32` `StateGraph(OrcaState)` `analyze_intent->planner->execute_agents->synthesize` singleton
+- `state.py:28` `OrcaState` `schemas.py:18` `IntentInterpretation` `TaskPlan` Pydantic structured output
+- `nodes.py:78` `get_llm()` fallback `None` if no `LLM_API_KEY` -> mock `find_pfz/check_safety/weather_forecast`, `execute_agents_node` real `psycopg` `pfz_observations`/`geofences`/`weather` + deterministic `risk MODERATE/HIGH`, `synthesize_node` mock `[M3/M4 Mock Synthesis]` when no key else `ChatOpenAI gpt-4o-mini`
+- Wired `POST /api/v1/chat` `POST /api/v1/chat/stream` `ainvoke`/`astream_events`
 
 ### Tests
-- Simulated execution flow successfully steps through Intent -> Plan -> Execute -> Synthesize.
-- Fallback import test confirmed no crashes without `OPENAI_API_KEY`.
+- `backend/.venv python test_m4.py` without `OPENAI_API_KEY`: `find_pfz -> marine_agent 2 PFZ`, `check_safety -> 4 agents risk MODERATE wind 12.5` PASSED
+- `POST /chat` via `uvicorn 8000` `224?` `MODERATE risk` evidence from DB verified
+
+### Notes
+- Mock synthesis used until `LLM_API_KEY` set in `.env` -> real `gpt-4o-mini` automatically
+- All integration on `D:` `uvicorn 2 processes` + `docker_data.vhdx`

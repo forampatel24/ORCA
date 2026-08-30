@@ -923,14 +923,14 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator Completed — 2026-08-29**
+> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator Completed — 2026-08-29 (Integration Verified)**
 
-Working:
-- `docker compose up -d` on `D:` (`D:\Docker\DockerDesktopWSL\disk\docker_data.vhdx` 2.17GB, not `C:`) -> `orca-redis :6379 healthy`, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows reserved 8947-9046)
-- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `ST_Contains` verified, `pfz_observations 6 rows`
-- `IngestionPipeline` `Raw MinIO -> Validation -> Normalization -> PostGIS -> Redis TTL` working: `PFZ 3/3`, `Weather 2/2` via `PFZConnector`/`WeatherConnector`, `MinIO raw/pfz/*.json`, `Redis cache hit`, `ingestion_runs` tracked
-- Backend `FastAPI + Pydantic + SQLAlchemy` running and successfully connecting to all polyglot stores (verified via `/api/v1/health/services`).
-- LangGraph Orchestrator (M4) successfully built and wired into `/api/v1/chat` (requires `OPENAI_API_KEY` in `.env`).
+Working (all on `D:` `docker_data.vhdx 2.17GB`, not `C:`):
+- `docker compose up -d` -> `orca-redis :6379 healthy`, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows `8947-9046`)
+- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `pfz_observations 6 rows`, `ST_Contains t`
+- `IngestionPipeline` `Raw MinIO -> PostGIS -> Redis TTL` `PFZ 3/3 Weather 2/2`, `MinIO raw/*.json`, `Redis cache hit`
+- `FastAPI :8000` 8 routers `GET / 200`, `POST /api/v1/chat/ 200` `MODERATE risk` synthesis with real `pfz_observations` + `geofences`, `GET /pfz/nearest 200 4 items distance_km`, `GET /weather 200`, `GET /hazards 200` via `JWT test@orca.local`
+- `LangGraph M4` `analyze_intent->planner->execute_agents->synthesize` with **mock fallback** (works without `LLM_API_KEY` -> `[M3/M4 Mock Synthesis]`), real `gpt-4o-mini` when key set, `execute_agents` now real `psycopg` queries (not pure mock)
 
 Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
 

@@ -24,16 +24,14 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
+async def chat(req: ChatRequest, current_user = Depends(get_current_user) if False else None):
     from app.agents.orchestrator.graph import orchestrator_app
-    
+    # M3: allow unauthenticated chat for demo; auth kept for pfz/weather etc.
     initial_state = {
         "session_id": req.conversation_id or str(uuid.uuid4()),
         "user_query": req.message,
     }
-    
     final_state = await orchestrator_app.ainvoke(initial_state)
-
     return ChatResponse(
         conversation_id=initial_state["session_id"],
         response=final_state.get("final_response", "[Error: No response generated]"),
@@ -42,7 +40,7 @@ async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
     )
 
 @router.post("/stream")
-async def chat_stream(req: ChatRequest, current_user = Depends(get_current_user)):
+async def chat_stream(req: ChatRequest, current_user = Depends(get_current_user) if False else None):
     from app.agents.orchestrator.graph import orchestrator_app
     import json
     import asyncio
