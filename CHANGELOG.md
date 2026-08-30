@@ -214,3 +214,22 @@ Date: 2026-08-30
 ### Fixed
 - ImportMeta env TS2339 -> (import.meta as any).env
 - npm run dev Start-Process npm.cmd vs npm
+
+---
+
+## Milestone 12 - Testing + Observability
+
+Date: 2026-08-30
+
+### Added
+- app/core/metrics.py Prometheus Counter/Histogram/Gauge orca_requests_total, app/core/middleware.py RequestIDMiddleware X-Request-ID + structlog + record_request
+- app/main.py /metrics Prometheus generate_latest + RequestIDMiddleware + CORS
+- backend/tests/unit/test_risk.py 5 tests, test_geospatial.py 4 tests, test_pfz.py 2 tests
+- backend/tests/integration/test_api.py 5 tests health/metrics/auth/injection, backend/tests/e2e/test_chat.py 5 tests TC-001 PFZ, TC-002 safety, TC-005 geofence, TC-008 multilingual mr, TC-009 multiturn
+
+### Tests
+- pytest 21 passed 0 failed 8.93s 4 warnings (PydanticDeprecated, on_event)
+- metrics has orca True, X-Request-ID test-123 echo verified, health 200
+
+### Notes
+- Follows 17_TESTING 11 passed unit + 17_TESTING integration/e2e + 18_MONITORING Prometheus structlog

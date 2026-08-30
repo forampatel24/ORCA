@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 09 — Frontend Command Center (M9) Completed**
+**Milestone 12 — Testing + Observability (M12) Completed — ALL M0-M12 DONE**
 
 Date: 2026-08-30
 
@@ -78,22 +78,30 @@ Date: 2026-08-30
   - `frontend/src/components/dashboard/RiskCard.tsx:1` `Charts.tsx:1` `ReactECharts` `SST line 27.8-28.5` `Chl bar 0.6-1.1`, `frontend/src/App.tsx:1` `12-col` `header time slider` `evidence drawer` `layer toggles pfz/mpa/eez` `QueryClientProvider` `TanStack`
   - `vite.config.ts:1` `proxy /api -> 8000`, `package.json:1` `zustand 4.5 + tanstack 5.50 + maplibre 4.4 + echarts 5.5`
 
+- **M10: Conversational Layer (02_CONV,03_ARCHITECTURE)**
+  - `app/services/language.py:1` `detect_language` `hi/mr/ta/te/kn/ml/gu/bn` `en`, `app/services/conversation.py:1` `save_message`/`get_history` `orca_app` `resolve_references` `there/तिथे + tomorrow`
+  - `agents/orchestrator/nodes.py:78` `Marathi सुरक्षित->check_safety` `Mumbai/मुंबई` `history` pronoun inherits `check_safety`, `api/routes/chat.py:1` `language = detect_language` `save` `history 5` `resolved_query` `X-Request-ID`
+  - Verified `EN en MODERATE 45` `MR mr MODERATE 45` `Find fishing zones -> What about tomorrow?` same `conversation_id`
+
+- **M11: Security Hardening (14_SECURITY)**
+  - `api/routes/chat.py:1` `INJECTION_PATTERNS` `422` `field_validator max_length 2000` `rate_limit 20/min` `429`, `scripts/create_orca_app.py:1` `orca_app` `GRANT SELECT/INSERT/UPDATE` `REVOKE CREATE` `blocked DROP`, `.env.example:1` `DATABASE_URL orca_app` `DATABASE_URL_ADMIN postgres`, `app/main.py:1` `PROJ_LIB` `CORS 5173/3000` `RequestIDMiddleware`
+
+- **M12: Testing + Observability (17/18)**
+  - `app/core/metrics.py:1` `Counter orca_requests_total` `Histogram` `Gauge`, `app/core/middleware.py:1` `RequestIDMiddleware` `X-Request-ID` `structlog` `record_request`, `app/main.py:1` `/metrics` `generate_latest`
+  - `backend/tests/unit/test_risk.py:1` 5 tests, `test_geospatial.py:1` 4 tests, `test_pfz.py:1` 2 tests, `tests/integration/test_api.py:1` 5 tests `health/metrics/auth/injection`, `tests/e2e/test_chat.py:1` 5 tests `TC-001 PFZ TC-002 safety TC-005 geofence TC-008 mr TC-009 multiturn` `21 passed 8.93s` `metrics has orca True` `X-Request-ID test-123`
+
 ## Working
 
-- `docker compose up -d` `orca-*` 31h healthy on `D:` `9100/6333/6379` `2.51GB` + `D:\PostreSQL 5432 PostGIS 3.6.2` `20 tables` + `uvicorn :8000` `1740s` `GET / 200` + `vite :5173` `200` `proxy /api -> 8000` `2.1MB` `738 modules`
-- `M6 engines` `risk VERY_HIGH 165` `pfz 0.776` `sst +1.5` + `M7 GIS` `maritime 1 + protected 2 + geofences 2 + cmfri 8` + `M8 RAG` `4 docs 6 chunks Qdrant 6` `retrieval 0.775` + `M9` `POST /chat via 5173 proxy 200` `PFZ 5 15.2km` `MapLibre markers` `ECharts SST/Chl` `chat+map sync` `Zustand/TanStack`
+- `docker compose up -d` `orca-*` 32h healthy on `D:` `9100/6333/6379` `2.51GB` + `D:\PostreSQL 5432 PostGIS 3.6.2` `20 tables` `maritime 1 + protected 2 + geofences 2 + cmfri 8` + `uvicorn :8000` ` metrics has orca True` ` X-Request-ID test-123` + `vite :5173` `2.1MB`
+- `M6 engines` `risk VERY_HIGH 165` `pfz 0.776` `sst +1.5` + `M7 GIS` `ST_Contains true` + `M8 RAG` `4 docs 6 chunks` `retrieval 0.775 citation` + `M9` `POST /chat 5 PFZ 15.2km` `MapLibre` `ECharts` + `M10 mr/hi` `multiturn` `M11 422 injection` `orca_app` `M12 21 tests passed`
 
 ## In Progress
 
-- M10 Conversational Layer (next)
+- None - ALL M0-M12 Completed
 
 ## Pending
 
-- M10 Conversational `there/that zone/tomorrow`
-- M9 Frontend Map+Chat
-- M10 Conversational
-- M11 Security
-- M12 Testing + Observability
+- None
 
 ## Known Issues
 
@@ -107,7 +115,7 @@ Date: 2026-08-30
 
 ## Next Milestone
 
-**M10: Conversational Layer** - `multi-turn` `there/that zone/tomorrow` `language detection` per `02_CONV` `03_ARCHITECTURE`
+**ALL MILESTONES COMPLETED — Ready for Demo** `http://localhost:5173` `http://localhost:8000/docs` `All on D:`
 
 ## Architecture Status
 

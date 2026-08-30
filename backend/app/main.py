@@ -4,10 +4,12 @@ import os
 os.environ["PROJ_LIB"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\pyproj\proj_dir\share\proj"
 os.environ["GDAL_DATA"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\rasterio\gdal_data"
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.api.routes import health, chat, auth, pfz, weather, hazards, risk, routes, geospatial
+from app.core.middleware import RequestIDMiddleware
 
 log = structlog.get_logger()
 
@@ -17,6 +19,7 @@ app = FastAPI(
     description="Agentic AI-powered Marine Intelligence Platform",
 )
 
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -34,6 +37,10 @@ app.include_router(risk.router, prefix="/api/v1/risk", tags=["risk"])
 app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
 app.include_router(geospatial.router, prefix="/api/v1/geospatial", tags=["geospatial"])
 
+
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/")
 async def root():
