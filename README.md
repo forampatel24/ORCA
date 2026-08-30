@@ -923,14 +923,14 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator Completed — 2026-08-29 (Integration Verified)**
+> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator + M5 Agents Completed — 2026-08-30 (Integration Verified)**
 
 Working (all on `D:` `docker_data.vhdx 2.17GB`, not `C:`):
-- `docker compose up -d` -> `orca-redis :6379 healthy`, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows `8947-9046`)
-- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `pfz_observations 6 rows`, `ST_Contains t`
-- `IngestionPipeline` `Raw MinIO -> PostGIS -> Redis TTL` `PFZ 3/3 Weather 2/2`, `MinIO raw/*.json`, `Redis cache hit`
-- `FastAPI :8000` 8 routers `GET / 200`, `POST /api/v1/chat/ 200` `MODERATE risk` synthesis with real `pfz_observations` + `geofences`, `GET /pfz/nearest 200 4 items distance_km`, `GET /weather 200`, `GET /hazards 200` via `JWT test@orca.local`
-- `LangGraph M4` `analyze_intent->planner->execute_agents->synthesize` with **mock fallback** (works without `LLM_API_KEY` -> `[M3/M4 Mock Synthesis]`), real `gpt-4o-mini` when key set, `execute_agents` now real `psycopg` queries (not pure mock)
+- `docker compose up -d` -> `orca-redis :6379 healthy` 30h, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows `8947-9046`)
+- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `pfz_observations 6 rows`, `geofences Test MPA`
+- `IngestionPipeline` `Raw MinIO -> PostGIS -> Redis TTL` `PFZ 3/3 Weather 2/2`, `Redis cache hit`
+- `FastAPI :8000` `POST /chat 1114 chars` `MODERATE risk` `GET /pfz/nearest 4 items 15.2km` via `JWT`
+- `LangGraph` + **M5 7 Agents** `marine(pfz+ocean) weather(hazards) ocean geospatial(ST_Contains) risk(score45) routing rag` via `tools/pfz,weather,geospatial,risk` deterministic `ST_Distance` `check_geofence inside Test MPA distance 0.0` `calculate_risk HIGH 70`
 
 Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
 
@@ -1074,8 +1074,8 @@ License information will be added before public release.
 
 **Architecture:** Defined (20 docs frozen)
 **Documentation:** Defined
-**Implementation:** M0 + M1 + M2 + M3 + M4 Completed (Foundation + Storage + Pipeline + API + Orchestrator)
-**Prototype:** Not yet reached (M5-M9 pending)
+**Implementation:** M0 + M1 + M2 + M3 + M4 + M5 Completed (Foundation + Storage + Pipeline + API + Orchestrator + 8 Agents on D:)
+**Prototype:** Not yet reached (M6-M9 pending)
 **Production:** Not yet reached
 
 ---

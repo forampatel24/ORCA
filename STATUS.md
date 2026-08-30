@@ -2,9 +2,9 @@
 
 ## Current Milestone
 
-**Milestone 04 — Orchestration Core (M4) Completed**
+**Milestone 05 — 8 Specialized Agents + Tools (M5) Completed**
 
-Date: 2026-08-29
+Date: 2026-08-30
 
 ## Completed
 
@@ -46,24 +46,27 @@ Date: 2026-08-29
 - **M4: Orchestration Core**
   - LangGraph `agents/orchestrator/graph.py:32` `StateGraph(OrcaState)` `analyze_intent->planner->execute_agents->synthesize` singleton `orchestrator_app`
   - Schemas `state.py:28` `OrcaState` `intent/location/time_range/plan/agent_results/final_response`, `schemas.py:18` `IntentInterpretation`, `TaskPlan`
-  - `nodes.py:78` `get_llm()` fallback `None` if no `LLM_API_KEY` -> mock intent/planner/synthesize (no crash), real LLM path `ChatOpenAI gpt-4o-mini` with `with_structured_output`
-  - `execute_agents_node` now real `psycopg` queries `pfz_observations`, `geofences`, `weather_observations` + deterministic `risk MODERATE/HIGH` instead of pure mock, provenance via DB
-  - Wired `POST /api/v1/chat` `POST /api/v1/chat/stream` `ainvoke` + `astream_events`
+  - `nodes.py:78` `get_llm()` fallback `None` if no `LLM_API_KEY` -> mock intent/planner/synthesize, real `ChatOpenAI gpt-4o-mini`
+  - `execute_agents_node` initial real DB queries + deterministic risk (M4), wired `POST /api/v1/chat` `astream_events`
+
+- **M5: 8 Specialized Agents + Tools (06_AGENT_SPEC)**
+  - Tools `app/tools/pfz.py:1` `get_nearest_pfz` `ST_DWithin` `ST_Distance`, `weather.py:1` `get_weather`/`get_hazards`, `geospatial.py:1` `check_geofence` `ST_Contains` `calculate_distance` `ST_Distance`, `ocean.py:1` `get_ocean`, `risk.py:1` `calculate_risk` `LOW/MODERATE/HIGH` deterministic, `rag.py:1` `search_knowledge` Qdrant mock
+  - Agents `app/agents/marine/agent.py:1` `MarineAgent` `pfz+ocean`, `weather/agent.py:1` `WeatherAgent` `weather+hazards`, `ocean/agent.py:1`, `geospatial/agent.py:1` `PostGIS`, `risk/agent.py:1` `weather+ocean+geofence -> risk_score`, `routing/agent.py:1` `calculate_distance`, `rag/agent.py:1` `evidence`
+  - Refactored `agents/orchestrator/nodes.py:78` `execute_agents_node` to use `agent_map` `marine/weather/ocean/geospatial/risk/routing/rag` with dependency-aware sequential exec, location `Mumbai 19.0,72.8`/`Ratnagiri 16.9,73.3` mapping
 
 ## Working
 
-- `docker compose up -d` `orca-*` 29h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2`, `IngestionPipeline` `Raw->MinIO->PostGIS->Redis` `PFZ 3/3 Weather 2/2`
-- `uvicorn :8000` running `2 processes` `GET / 200`, `POST /api/v1/chat/ 200` `MODERATE risk` synthesis with real DB `marine_agent 2 PFZ + weather 12.5 + geofence Test MPA`, `GET /pfz/nearest 200 4 items distance_km`, `GET /weather 200`, `GET /hazards 200` all via JWT `test@orca.local`
-- `test_m4.py` `find_pfz -> marine_agent`, `check_safety -> 4 agents + risk MODERATE` verified via `backend/.venv python` without `LLM_API_KEY` (mock fallback)
-- MinIO `6 buckets` `383B raw`, Qdrant `orca_knowledge green`, Redis `PONG` `orca:*` TTL
+- `docker compose up -d` `orca-*` 30h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200`
+- `POST /api/v1/chat` `M5 agents` `find_pfz -> marine_agent 3 PFZ distance 15.2km`, `check_safety -> 4 agents weather 12.5 + marine 3 PFZ + geofence inside Test MPA + risk MODERATE 45` via `tools/geospatial check_geofence`, `tools/risk calculate_risk`, verified `backend/.venv` `asyncio.run(orchestrator.ainvoke)` without `LLM_API_KEY`
+- Tools deterministic `ST_DWithin`/`ST_Contains`/`ST_Distance` `geospatial` `inside_geofence Test MPA Mumbai type protected distance 0.0`, `risk HIGH 70` when `wind 18 wave 3.0`
+- `GET /pfz/nearest 200 4 items`, `GET /weather 200`, `GET /hazards 200` via JWT, `Qdrant green` `MinIO 6 buckets` `Redis PONG`
 
 ## In Progress
 
-- M5 Specialized Agents + Tools (next)
+- M6 Intelligence Engines (next)
 
 ## Pending
 
-- M5 Agents + Tools
 - M6 Risk/Route engines
 - M7 Static GIS datasets (EEZ subset)
 - M8 RAG ingestion
@@ -82,7 +85,7 @@ Date: 2026-08-29
 
 ## Next Milestone
 
-**M5: Specialized Agents + Tools** - Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents + deterministic PostGIS/Shapely tools, structured I/O.
+**M6: Intelligence Engines** - Deterministic `risk` `LOW/MOD/HIGH/CRITICAL` + `route` `A*` + `SST/chl` anomaly + `PFZ` scoring per `15_ML_ANALYTICS`
 
 ## Architecture Status
 

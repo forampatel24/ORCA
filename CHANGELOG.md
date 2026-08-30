@@ -115,8 +115,27 @@ Date: 2026-08-29
 
 ### Tests
 - `backend/.venv python test_m4.py` without `OPENAI_API_KEY`: `find_pfz -> marine_agent 2 PFZ`, `check_safety -> 4 agents risk MODERATE wind 12.5` PASSED
-- `POST /chat` via `uvicorn 8000` `224?` `MODERATE risk` evidence from DB verified
+- `POST /chat` via `uvicorn 8000` `MODERATE risk` evidence from DB verified
 
 ### Notes
 - Mock synthesis used until `LLM_API_KEY` set in `.env` -> real `gpt-4o-mini` automatically
 - All integration on `D:` `uvicorn 2 processes` + `docker_data.vhdx`
+
+---
+
+## Milestone 05 — 8 Specialized Agents + Tools
+
+Date: 2026-08-30
+
+### Added
+- Tools `app/tools/pfz.py:1` `get_nearest_pfz` `ST_DWithin`/`ST_Distance` Geog, `weather.py:1` `get_weather`/`get_hazards`, `geospatial.py:1` `check_geofence` `ST_Contains`/`calculate_distance` `ST_Distance`, `ocean.py:1` `get_ocean`, `risk.py:1` `calculate_risk` `LOW/MODERATE/HIGH` `score 0-100` deterministic, `rag.py:1` `search_knowledge` Qdrant mock
+- Agents `app/agents/marine/agent.py:1` `MarineAgent` `pfz+ocean`, `weather/agent.py:1` `WeatherAgent` `weather+hazards`, `ocean/agent.py:1`, `geospatial/agent.py:1` `PostGIS`, `risk/agent.py:1` `weather+ocean+geofence -> risk_score 45`, `routing/agent.py:1` `distance 18km`, `rag/agent.py:1` `evidence`
+- Refactored `agents/orchestrator/nodes.py:78` `execute_agents_node` to use `agent_map` `marine/weather/ocean/geospatial/risk/routing/rag` with dependency-aware sequential exec, location `Mumbai 19.0,72.8`/`Ratnagiri 16.9,73.3`
+- `agents/*/__init__.py` dirs created
+
+### Tests
+- `backend/.venv` `asyncio.run(orchestrator.ainvoke)`: `Where is nearest PFZ? -> marine_agent 3 PFZ 15.2km`, `Is it safe tomorrow Mumbai? -> 4 agents weather 12.5 + marine 3 PFZ + geofence inside Test MPA + risk MODERATE 45`, `What is weather Ratnagiri? -> weather_agent`, `uvicorn :8000` `POST /chat 1114 chars` `MODERATE risk` verified, `check_geofence 19.0,72.8 -> inside Test MPA protected distance 0.0`, `calculate_risk 18,3.0 -> HIGH 70`
+
+### Notes
+- Follows `06_AGENT_SPEC` 8 agents `AI-010..017` each single responsibility + tools, `AI-007` deterministic `PostGIS` no LLM math, `AI-005` collaboration via `OrcaState` `agent_results`
+- All data on `D:` `docker_data.vhdx` + `D:\PostreSQL`

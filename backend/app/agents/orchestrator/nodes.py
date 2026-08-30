@@ -76,45 +76,63 @@ async def planner_node(state: OrcaState) -> OrcaState:
     return {"plan": plan_dicts, "required_agents": required_agents}
 
 async def execute_agents_node(state: OrcaState) -> OrcaState:
-    """Execute agents with real PostGIS/Redis data (M3/M4 integration)."""
+    """M5: Execute 8 specialized agents via tools (docs 06_AGENT_SPEC)."""
     results = state.get("agent_results", {}) or {}
-    # Try real DB calls, fallback to mock if DB unavailable
-    try:
-        import psycopg
-        conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
-        cur = conn.cursor()
-        for task in state["plan"]:
-            agent = task["agent_name"]
-            if agent == "marine_agent":
-                cur.execute("SELECT latitude, longitude, metadata->>'sector' as sector FROM pfz_observations LIMIT 2")
-                rows = cur.fetchall()
-                results[agent] = [{"lat": r[0], "lon": r[1], "sector": r[2]} for r in rows] or "No PFZ data"
-            elif agent == "weather_agent":
-                cur.execute("SELECT wind_speed, temperature, rainfall FROM weather_observations LIMIT 1")
-                r = cur.fetchone()
-                results[agent] = {"wind_speed": r[0] if r else 12.5, "temperature": r[1] if r else 29.0, "rainfall": r[2] if r else 0.2} if r else {"wind_speed": 12.5, "temperature": 29.0}
-            elif agent == "geospatial_agent":
-                cur.execute("SELECT name, geofence_type FROM geofences LIMIT 1")
-                r = cur.fetchone()
-                results[agent] = {"geofence": r[0] if r else "Test MPA Mumbai", "type": r[1] if r else "protected"}
-            elif agent == "risk_agent":
-                # simple deterministic risk: wind >15 => HIGH
-                w = results.get("weather_agent", {})
-                wind = w.get("wind_speed", 12.5) if isinstance(w, dict) else 12.5
-                level = "HIGH" if wind > 15 else "MODERATE" if wind > 10 else "LOW"
-                results[agent] = {"risk_level": level, "wind_speed": wind, "factors": ["wind_speed"]}
-            elif agent == "routing_agent":
-                results[agent] = {"route": "Mumbai North PFZ 18km", "distance_km": 18, "status": "optimized"}
-            elif agent == "rag_agent":
-                results[agent] = {"evidence": "INCOIS advisory: avoid during high wind", "source": "INCOIS"}
+    # Default location from state or Mumbai
+    loc_str = state.get("location") or "Mumbai"
+    lat, lon = 19.0, 72.8
+    if loc_str and "ratnagiri" in loc_str.lower():
+        lat, lon = 16.9, 73.3
+    # Import agents lazily to avoid circular
+    from app.agents.marine.agent import marine_agent
+    from app.agents.weather.agent import weather_agent
+    from app.agents.ocean.agent import ocean_agent
+    from app.agents.geospatial.agent import geospatial_agent
+    from app.agents.risk.agent import risk_agent
+    from app.agents.routing.agent import routing_agent
+    from app.agents.rag.agent import rag_agent
+    agent_map = {
+        "marine_agent": marine_agent,
+        "weather_agent": weather_agent,
+        "ocean_agent": ocean_agent,
+        "geospatial_agent": geospatial_agent,
+        "risk_agent": risk_agent,
+        "routing_agent": routing_agent,
+        "rag_agent": rag_agent,
+        "geofence_agent": geospatial_agent,
+        "fishing_agent": marine_agent,
+    }
+    # Execute in plan order - respects dependencies (planner already orders)
+    for task in state.get("plan", []):
+        agent_name = task["agent_name"]
+        agent = agent_map.get(agent_name)
+        if not agent:
+            results[agent_name] = f"[UNKNOWN AGENT {agent_name}] {task['task_description']}"
+            continue
+        try:
+            if agent_name == "marine_agent":
+                results[agent_name] = await agent.run(lat=lat, lon=lon)
+            elif agent_name == "weather_agent":
+                results[agent_name] = await agent.run(lat=lat, lon=lon)
+            elif agent_name == "ocean_agent":
+                results[agent_name] = await agent.run(lat=lat, lon=lon)
+            elif agent_name == "geospatial_agent":
+                results[agent_name] = await agent.run(lat=lat, lon=lon)
+            elif agent_name == "risk_agent":
+                # risk needs prior results
+                results[agent_name] = await agent.run(
+                    weather=results.get("weather_agent"),
+                    ocean=results.get("ocean_agent") or results.get("marine_agent"),
+                    geofence=results.get("geospatial_agent")
+                )
+            elif agent_name == "routing_agent":
+                results[agent_name] = await agent.run(origin={"lat": lat, "lon": lon}, destination={"lat": 19.1, "lon": 72.5})
+            elif agent_name == "rag_agent":
+                results[agent_name] = await agent.run(query=state.get("user_query", ""))
             else:
-                results[agent] = f"[RESULT {agent}] {task['task_description']}"
-        conn.close()
-    except Exception as e:
-        for task in state["plan"]:
-            agent = task["agent_name"]
-            if agent not in results:
-                results[agent] = f"[MOCK FALLBACK {agent}] {task['task_description']} error={e}"
+                results[agent_name] = await agent.run()
+        except Exception as e:
+            results[agent_name] = {"error": str(e), "task": task["task_description"]}
     return {"agent_results": results}
 
 async def synthesize_node(state: OrcaState) -> OrcaState:
