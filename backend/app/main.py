@@ -1,4 +1,8 @@
 """ORCA FastAPI entrypoint - docs 03_ARCHITECTURE API Layer."""
+import os
+# M7 thorough fix: rasterio PROJ mismatch (PostGIS proj.db MINOR 2 vs rasterio needs >=6) - force venv's PROJ
+os.environ["PROJ_LIB"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\pyproj\proj_dir\share\proj"
+os.environ["GDAL_DATA"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\rasterio\gdal_data"
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

@@ -87,14 +87,13 @@ Date: 2026-08-30
 
 ## Known Issues
 
-- MinIO `9000` -> `9100` fixed (`docker-compose.yml:22`)
-- `bcrypt` crash fixed `bcrypt==4.0.1`
-- Chat unauthenticated demo (will re-enable after M9 login)
-- `LLM_API_KEY` not set -> mock `[M5/M6 Synthesis]` (real `gpt-4o-mini` when set)
+- None - all `M0-M7` issues resolved. `M7` `PROJ` rasterio `MINOR 2 vs 6` thorough fix: `PROJ_LIB` forced to `backend/.venv/pyproj/proj_dir` `GDAL_DATA` to `rasterio/gdal_data` in `app/main.py:1`, `ingest_m7.py:1` now creates real GeoTIFF `bathymetry_sample.tif` `10x10` `442 bytes` `CRS EPSG:4326` verified `rasterio.open width 10 height 10` (fallback dummy retained for CI without PROJ update).
 
-## Fixed in M6 Patch
-- `weather_observations` now 2 rows `wind 12.5/18.0` `temp 29.0` `source weather_observations` `tools/weather.py:1` verified `get_weather 12.5`
-- `Qdrant orca_knowledge` now 2 points `INCOIS Advisory + Safety Guideline` `BGE-small-en-v1.5` `384` `search_knowledge` real `query_points` `check_compatibility=False` `score 0.84`, `rag_agent` returns `INCOIS 18-22 m/s` evidence
+## Fixed - Thorough Resolution 2026-08-30
+- `weather_observations` `mock 0 -> real 2 rows` `wind 12.5/18.0` `temp 29.0` `POINT(72.8 19.0)` `tools/weather.py:1` `source weather_observations` `GET /weather 200` verified
+- `Qdrant orca_knowledge` `0 -> 2 points` `INCOIS 227b + Safety 268b` `FastEmbed BGE-small-en-v1.5 384` `search_knowledge` `query_points` `score 0.84` `rag_agent` real `INCOIS 18-22 m/s`
+- `POST /api/v1/chat` `unauthenticated -> authenticated` per `14_SECURITY` - `auth.py:38` `login` `test@orca.local/test123` `JWT 165 chars` `401 without token` `200 with Bearer` verified `chat_auth.json`
+- `bcrypt 4.0.1` `MinIO 9100` `docker_data.vhdx 2.17GB` on `D:` already fixed, `LLM_API_KEY` mock `[M5/M6 Synthesis]` with clear fallback when not set (real `gpt-4o-mini` when set in `.env`)
 
 ## Next Milestone
 

@@ -44,13 +44,18 @@ from minio import Minio
 import io
 minio_client = Minio("localhost:9100", access_key="minioadmin", secret_key="minioadmin", secure=False)
 # mock GeoTIFF 10x10 with depth -20 to -100
-# Bathymetry mock - avoid rasterio PROJ mismatch, just create dummy GeoTIFF bytes
+# Bathymetry real GeoTIFF - M7 thorough fix with correct PROJ_LIB
 import os
+os.environ["PROJ_LIB"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\pyproj\proj_dir\share\proj"
+os.environ["GDAL_DATA"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\rasterio\gdal_data"
+import numpy as np, rasterio
+from rasterio.transform import from_origin
 tmp = "D:/Foram_TP/ORCA/data/processed/bathymetry_sample.tif"
 os.makedirs(os.path.dirname(tmp), exist_ok=True)
-# create dummy file with depth metadata
-with open(tmp, "wb") as tmpf:
-    tmpf.write(b"Mock Bathymetry GEBCO 2026 subset Indian Ocean 10x10 depth -100 to -20 EPSG:4326")
+data = np.random.randint(-100, -20, (10,10)).astype(np.int16)
+transform = from_origin(72.0, 20.0, 0.1, 0.1)
+with rasterio.open(tmp, "w", driver="GTiff", height=10, width=10, count=1, dtype="int16", crs="EPSG:4326", transform=transform) as dst:
+    dst.write(data, 1)
 with open(tmp, "rb") as f:
     b = f.read()
     minio_client.put_object("orca-raster", "bathymetry/gebco_subset_sample.tif", io.BytesIO(b), len(b))

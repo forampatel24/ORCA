@@ -24,9 +24,9 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(req: ChatRequest, current_user = Depends(get_current_user) if False else None):
+async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
     from app.agents.orchestrator.graph import orchestrator_app
-    # M3: allow unauthenticated chat for demo; auth kept for pfz/weather etc.
+    # M6 fix: chat now requires JWT per docs 14_SECURITY - use POST /api/v1/auth/login to get token
     initial_state = {
         "session_id": req.conversation_id or str(uuid.uuid4()),
         "user_query": req.message,
@@ -40,7 +40,7 @@ async def chat(req: ChatRequest, current_user = Depends(get_current_user) if Fal
     )
 
 @router.post("/stream")
-async def chat_stream(req: ChatRequest, current_user = Depends(get_current_user) if False else None):
+async def chat_stream(req: ChatRequest, current_user = Depends(get_current_user)):
     from app.agents.orchestrator.graph import orchestrator_app
     import json
     import asyncio
