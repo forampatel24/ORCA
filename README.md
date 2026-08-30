@@ -923,12 +923,12 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0-M6 Completed — 2026-08-30 (M6 Intelligence Engines Verified)**
+> **M0-M7 Completed — 2026-08-30 (M7 GIS Verified)**
 
 Working (all on `D:` `docker_data.vhdx 2.17GB`, not `C:`):
 - `docker compose up -d` `orca-*` 30h healthy `9100/6333/6379` + `PostgreSQL 18.4 :5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200`
-- `IngestionPipeline` `PFZ 3/3 Weather 2/2` `6 data_sources` `pfz_observations 6 rows`
-- `M5 7 Agents` + `M6 engines` `risk LOW/MOD/HIGH/VERY_HIGH` `pfz_score 0.776` `sst +1.5` `haversine 33.43` `route cost 0.359` `POST /chat MODERATE 45` `check_geofence inside Test MPA`
+- `M7 GIS` `maritime 1 EEZ + protected 2 MPA + geofences 2 + cmfri 8` `ST_Contains true` `ST_DWithin 10km true` `MinIO raster/bathymetry`
+- `M5/M6` `POST /chat MODERATE 45` `risk VERY_HIGH` `pfz 0.776` `sst +1.5` `route cost 0.359`
 
 Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
 

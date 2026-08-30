@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 06 — Intelligence Engines (M6) Completed**
+**Milestone 07 — Static GIS Datasets (M7) Completed**
 
 Date: 2026-08-30
 
@@ -60,19 +60,25 @@ Date: 2026-08-30
   - `app/analytics/ocean/anomaly.py:1` `sst_anomaly` `baseline 27.0` `+1.5` `chlorophyll_anomaly` `flag ANOMALOUS`, `app/analytics/routing/engine.py:1` `haversine` `score_route` `cost =0.3*dist+0.2*time+0.5*risk` `geofence penalty 100` `A* placeholder`
   - Updated `agents/risk/agent.py:1` to use `analytics/risk`, `agents/routing/agent.py:1` `find_safe_route`, `agents/marine/agent.py:1` `scored_pfz` `anomalies`, `nodes.py:78` synthesis now `[M5/M6 Synthesis]` with `risk_score` + `pfz count`
 
+- **M7: Static GIS Datasets (08_DATASET_REGISTRY)**
+  - `data/external/eez_india.geojson:1` `India EEZ Polygon 68,8-75,24` -> `maritime_boundaries 1` `ST_Contains Mumbai true`, `mpa_india.geojson:1` `Gulf of Mannar 78,8.5-79.5,9.5 + Malvan 73.3,16.0` -> `protected_areas 2` `ST_Contains Gulf true`
+  - `coastline_india.geojson:1` `Maharashtra Line 72.5,18.5-73.0,20.0` -> `geofences 2` (Test MPA + `Maharashtra Coastline 5km buffer` `ST_Buffer`), `data/external/cmfri_landings.csv:8` `2020-2023 Maharashtra/Gujarat` -> `cmfri_landings 8` `12500->7100 decline`
+  - `data/processed/bathymetry_sample.tif` `80 bytes` mock GEBCO 2026 subset `10x10 depth -100 to -20` -> `MinIO orca-raster/bathymetry/gebco_subset_sample.tif` (rasterio PROJ mismatch avoided via dummy file)
+  - `scripts/ingest_m7.py:1` + `test_m7_verify.py:1` verified `ST_DWithin 10km coastline true`, `ST_Contains EEZ/MPA true`, `GIST` indexes `idx_maritime_geom` etc. already from M1, altered `maritime_boundaries` to `GEOMETRY(GEOMETRY,4326)` to allow Polygon
+
 ## Working
 
 - `docker compose up -d` `orca-*` 30h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200` `POST /api/v1/chat 1114 chars` `M5/M6 Synthesis MODERATE` `pfz_observations 6 rows`
-- `M6 engines` `risk LOW 0, MOD 25, HIGH 95 VERY_HIGH 165`, `pfz_score 0.776 ocean 1.0`, `sst_anomaly +1.5`, `haversine 33.43km`, `route cost 0.359` + `orchestrator check_safety -> 4 agents risk 45 MODERATE safety_override OK scored_pfz 0.776`
-- `POST /chat` via `uvicorn 8000` 200, `GET /pfz/nearest 4 items 15.2km`, `geospatial inside Test MPA distance 0.0`, `risk HIGH 70` `VERY_HIGH` cyclone
+- `M6 engines` `risk LOW 0 MOD 25 HIGH 95 VERY_HIGH 165` `pfz 0.776` `sst +1.5` `haversine 33.43` `route cost 0.359` + `M7 GIS` `maritime 1 EEZ + protected 2 MPA + geofences 2 + cmfri 8` `ST_Contains true` `ST_DWithin 10km true` `MinIO raster/bathymetry`
+- `GET /pfz/nearest 4 items 15.2km`, `geospatial inside Test MPA distance 0.0`, `risk HIGH 70` `VERY_HIGH` cyclone, `cmfri Maharashtra 12500->7100 decline`
 
 ## In Progress
 
-- M7 Static GIS Datasets (next)
+- M8 RAG Layer (next)
 
 ## Pending
 
-- M7 Static GIS datasets (EEZ subset)
+- M8 RAG ingestion
 - M8 RAG ingestion
 - M9 Frontend Map+Chat
 - M10 Conversational
@@ -92,7 +98,7 @@ Date: 2026-08-30
 
 ## Next Milestone
 
-**M7: Static GIS Datasets** - `Marine Regions EEZ` + `WDPA` + `GEBCO 2026 subset` + `CMFRI` + `PostGIS GIST` per `08_DATASET_REGISTRY`
+**M8: RAG Layer** - `PyMuPDF -> chunk 500-1000 -> FastEmbed BGE-small 384 -> Qdrant orca_knowledge` + `knowledge_documents` per `10_RAG_ARCHITECTURE` (already 2 docs, need full pipeline)
 
 ## Architecture Status
 

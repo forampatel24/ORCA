@@ -159,3 +159,20 @@ odes.py:78 synthesis [M5/M6 Synthesis]
 
 ### Notes
 - Follows 15_ML_ANALYTICS deterministic AI-007 no LLM math, safety_override per docs 25
+
+---
+
+## Milestone 07 - Static GIS Datasets
+
+Date: 2026-08-30
+
+### Added
+- data/external/eez_india.geojson India EEZ -> maritime_boundaries 1
+- data/external/mpa_india.geojson 2 MPAs -> protected_areas 2
+- data/external/coastline_india.geojson -> geofences 2
+- data/external/cmfri_landings.csv 8 rows -> cmfri_landings 8
+- data/processed/bathymetry_sample.tif 80 bytes -> MinIO orca-raster/bathymetry/gebco_subset_sample.tif
+- scripts/ingest_m7.py verified ST_Contains true
+
+### Tests
+- maritime 1 + protected 2 + geofences 2 + cmfri 8 EEZ contains Mumbai true
