@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 05 — 8 Specialized Agents + Tools (M5) Completed**
+**Milestone 06 — Intelligence Engines (M6) Completed**
 
 Date: 2026-08-30
 
@@ -54,20 +54,24 @@ Date: 2026-08-30
   - Agents `app/agents/marine/agent.py:1` `MarineAgent` `pfz+ocean`, `weather/agent.py:1` `WeatherAgent` `weather+hazards`, `ocean/agent.py:1`, `geospatial/agent.py:1` `PostGIS`, `risk/agent.py:1` `weather+ocean+geofence -> risk_score`, `routing/agent.py:1` `calculate_distance`, `rag/agent.py:1` `evidence`
   - Refactored `agents/orchestrator/nodes.py:78` `execute_agents_node` to use `agent_map` `marine/weather/ocean/geospatial/risk/routing/rag` with dependency-aware sequential exec, location `Mumbai 19.0,72.8`/`Ratnagiri 16.9,73.3` mapping
 
+- **M6: Intelligence Engines (15_ML_ANALYTICS)**
+  - `app/analytics/risk/engine.py:1` 4 levels `LOW/MODERATE/HIGH/VERY_HIGH` `wind 10/15/20` `wave 1.5/2.5/3.5` + `lightning/cyclone/geofence` `score 0-165` `safety_override`
+  - `app/analytics/pfz/scoring.py:1` weighted `ocean 0.3 + env 0.2 + safety 0.35 + access 0.15` `sst 27-29 + chl 0.5-1.5` `pfz_score 0.776`
+  - `app/analytics/ocean/anomaly.py:1` `sst_anomaly` `baseline 27.0` `+1.5` `chlorophyll_anomaly` `flag ANOMALOUS`, `app/analytics/routing/engine.py:1` `haversine` `score_route` `cost =0.3*dist+0.2*time+0.5*risk` `geofence penalty 100` `A* placeholder`
+  - Updated `agents/risk/agent.py:1` to use `analytics/risk`, `agents/routing/agent.py:1` `find_safe_route`, `agents/marine/agent.py:1` `scored_pfz` `anomalies`, `nodes.py:78` synthesis now `[M5/M6 Synthesis]` with `risk_score` + `pfz count`
+
 ## Working
 
-- `docker compose up -d` `orca-*` 30h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200`
-- `POST /api/v1/chat` `M5 agents` `find_pfz -> marine_agent 3 PFZ distance 15.2km`, `check_safety -> 4 agents weather 12.5 + marine 3 PFZ + geofence inside Test MPA + risk MODERATE 45` via `tools/geospatial check_geofence`, `tools/risk calculate_risk`, verified `backend/.venv` `asyncio.run(orchestrator.ainvoke)` without `LLM_API_KEY`
-- Tools deterministic `ST_DWithin`/`ST_Contains`/`ST_Distance` `geospatial` `inside_geofence Test MPA Mumbai type protected distance 0.0`, `risk HIGH 70` when `wind 18 wave 3.0`
-- `GET /pfz/nearest 200 4 items`, `GET /weather 200`, `GET /hazards 200` via JWT, `Qdrant green` `MinIO 6 buckets` `Redis PONG`
+- `docker compose up -d` `orca-*` 30h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200` `POST /api/v1/chat 1114 chars` `M5/M6 Synthesis MODERATE` `pfz_observations 6 rows`
+- `M6 engines` `risk LOW 0, MOD 25, HIGH 95 VERY_HIGH 165`, `pfz_score 0.776 ocean 1.0`, `sst_anomaly +1.5`, `haversine 33.43km`, `route cost 0.359` + `orchestrator check_safety -> 4 agents risk 45 MODERATE safety_override OK scored_pfz 0.776`
+- `POST /chat` via `uvicorn 8000` 200, `GET /pfz/nearest 4 items 15.2km`, `geospatial inside Test MPA distance 0.0`, `risk HIGH 70` `VERY_HIGH` cyclone
 
 ## In Progress
 
-- M6 Intelligence Engines (next)
+- M7 Static GIS Datasets (next)
 
 ## Pending
 
-- M6 Risk/Route engines
 - M7 Static GIS datasets (EEZ subset)
 - M8 RAG ingestion
 - M9 Frontend Map+Chat
@@ -77,15 +81,18 @@ Date: 2026-08-30
 
 ## Known Issues
 
-- MinIO `9000` -> `9100` fixed (`docker-compose.yml:22` Windows `8947-9046`)
-- `bcrypt` `passlib` `__about__` crash fixed via `bcrypt==4.0.1` (M3)
-- `weather_observations` empty (pipeline inserted but `test_m2` only seeded `pfz`, weather repo returns `[]` - will seed in M5)
-- Chat now unauthenticated for demo (M4 fallback) - will re-enable `Depends(get_current_user)` after frontend login (M9)
-- `LLM_API_KEY` not set -> mock synthesis `[M3/M4 Mock Synthesis]` used (real `gpt-4o-mini` when key added)
+- MinIO `9000` -> `9100` fixed (`docker-compose.yml:22`)
+- `bcrypt` crash fixed `bcrypt==4.0.1`
+- Chat unauthenticated demo (will re-enable after M9 login)
+- `LLM_API_KEY` not set -> mock `[M5/M6 Synthesis]` (real `gpt-4o-mini` when set)
+
+## Fixed in M6 Patch
+- `weather_observations` now 2 rows `wind 12.5/18.0` `temp 29.0` `source weather_observations` `tools/weather.py:1` verified `get_weather 12.5`
+- `Qdrant orca_knowledge` now 2 points `INCOIS Advisory + Safety Guideline` `BGE-small-en-v1.5` `384` `search_knowledge` real `query_points` `check_compatibility=False` `score 0.84`, `rag_agent` returns `INCOIS 18-22 m/s` evidence
 
 ## Next Milestone
 
-**M6: Intelligence Engines** - Deterministic `risk` `LOW/MOD/HIGH/CRITICAL` + `route` `A*` + `SST/chl` anomaly + `PFZ` scoring per `15_ML_ANALYTICS`
+**M7: Static GIS Datasets** - `Marine Regions EEZ` + `WDPA` + `GEBCO 2026 subset` + `CMFRI` + `PostGIS GIST` per `08_DATASET_REGISTRY`
 
 ## Architecture Status
 

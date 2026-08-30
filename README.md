@@ -923,14 +923,12 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0 Foundation + M1 Storage + M2 Pipeline + M3 API + M4 Orchestrator + M5 Agents Completed — 2026-08-30 (Integration Verified)**
+> **M0-M6 Completed — 2026-08-30 (M6 Intelligence Engines Verified)**
 
 Working (all on `D:` `docker_data.vhdx 2.17GB`, not `C:`):
-- `docker compose up -d` -> `orca-redis :6379 healthy` 30h, `orca-qdrant :6333 healthy`, `orca-minio :9100->9000 healthy` (9100 avoids Windows `8947-9046`)
-- `PostgreSQL 18.4` native `D:\PostreSQL` `:5432` + `PostGIS 3.6.2` -> `orca_db` 20 tables, `6 data_sources`, `pfz_observations 6 rows`, `geofences Test MPA`
-- `IngestionPipeline` `Raw MinIO -> PostGIS -> Redis TTL` `PFZ 3/3 Weather 2/2`, `Redis cache hit`
-- `FastAPI :8000` `POST /chat 1114 chars` `MODERATE risk` `GET /pfz/nearest 4 items 15.2km` via `JWT`
-- `LangGraph` + **M5 7 Agents** `marine(pfz+ocean) weather(hazards) ocean geospatial(ST_Contains) risk(score45) routing rag` via `tools/pfz,weather,geospatial,risk` deterministic `ST_Distance` `check_geofence inside Test MPA distance 0.0` `calculate_risk HIGH 70`
+- `docker compose up -d` `orca-*` 30h healthy `9100/6333/6379` + `PostgreSQL 18.4 :5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200`
+- `IngestionPipeline` `PFZ 3/3 Weather 2/2` `6 data_sources` `pfz_observations 6 rows`
+- `M5 7 Agents` + `M6 engines` `risk LOW/MOD/HIGH/VERY_HIGH` `pfz_score 0.776` `sst +1.5` `haversine 33.43` `route cost 0.359` `POST /chat MODERATE 45` `check_geofence inside Test MPA`
 
 Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
 
@@ -1074,8 +1072,8 @@ License information will be added before public release.
 
 **Architecture:** Defined (20 docs frozen)
 **Documentation:** Defined
-**Implementation:** M0 + M1 + M2 + M3 + M4 + M5 Completed (Foundation + Storage + Pipeline + API + Orchestrator + 8 Agents on D:)
-**Prototype:** Not yet reached (M6-M9 pending)
+**Implementation:** M0-M6 Completed (Foundation + Storage + Pipeline + API + Orchestrator + 8 Agents + Intelligence Engines on D:)
+**Prototype:** Not yet reached (M7-M9 pending)
 **Production:** Not yet reached
 
 ---

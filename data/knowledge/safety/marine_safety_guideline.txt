@@ -1,0 +1,3 @@
+Marine Safety Guideline - Restricted Zones
+Marine Protected Area (MPA) Mumbai: Polygon 72.5 18.8 to 73.0 19.2. Entry prohibited without permission. Violation attracts penalty. Maintain 5km buffer.
+Safety: wind >15 m/s or wave >2.5m = HIGH risk. Use ORCA risk engine.

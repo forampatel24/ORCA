@@ -139,3 +139,23 @@ Date: 2026-08-30
 ### Notes
 - Follows `06_AGENT_SPEC` 8 agents `AI-010..017` each single responsibility + tools, `AI-007` deterministic `PostGIS` no LLM math, `AI-005` collaboration via `OrcaState` `agent_results`
 - All data on `D:` `docker_data.vhdx` + `D:\PostreSQL`
+
+---
+
+## Milestone 06 — Intelligence Engines
+
+Date: 2026-08-30
+
+### Added
+- pp/analytics/risk/engine.py:1 4 levels LOW/MODERATE/HIGH/VERY_HIGH thresholds wind 10/15/20 wave 1.5/2.5/3.5 + lightning/cyclone/geofence score safety_override
+- pp/analytics/pfz/scoring.py:1 weighted ocean 0.3 + env 0.2 + safety 0.35 + access 0.15 pfz_score 0.776
+- pp/analytics/ocean/anomaly.py:1 sst_anomaly aseline 27.0 chlorophyll_anomaly
+- pp/analytics/routing/engine.py:1 haversine score_route cost=0.3*dist+0.2*time+0.5*risk geofence penalty
+- Updated gents/risk/agent.py:1 gents/routing/agent.py:1 gents/marine/agent.py:1 scored_pfz + anomalies, 
+odes.py:78 synthesis [M5/M6 Synthesis]
+
+### Tests
+- isk LOW 0 MOD 25 HIGH 95 VERY_HIGH 165 pfz 0.776 sst +1.5 haversine 33.43 oute cost 0.359 orchestrator check_safety -> risk 45 MODERATE verified ackend/.venv
+
+### Notes
+- Follows 15_ML_ANALYTICS deterministic AI-007 no LLM math, safety_override per docs 25

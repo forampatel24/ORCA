@@ -140,12 +140,12 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
     llm = get_llm()
     results = state.get("agent_results", {})
     if llm is None:
-        # Deterministic synthesis without LLM
         intent = state.get("intent", "")
         if "risk" in str(results).lower() or intent == "check_safety":
             risk = results.get("risk_agent", {})
             level = risk.get("risk_level", "UNKNOWN") if isinstance(risk, dict) else "UNKNOWN"
-            return {"final_response": f"[M3/M4 Mock Synthesis] Safety assessment: {level} risk. Wind {risk.get('wind_speed','?')} m/s. Evidence: {json.dumps(results, indent=2)[:800]}"}
+            wind = risk.get("wind_speed", risk.get("inputs", {}).get("wind_speed", "?")) if isinstance(risk, dict) else "?"
+            return {"final_response": f"[M5/M6 Synthesis] Safety {level} risk (score {risk.get('risk_score','?')}). Wind {wind} m/s. PFZ {len(results.get('marine_agent',{}).get('pfz',[]))} zones. Evidence: {json.dumps(results, indent=2)[:700]}"}
         return {"final_response": f"[M3/M4 Mock Synthesis] Query '{state['user_query']}' answered with evidence: {json.dumps(results)[:1000]}"}
     results_str = json.dumps(results, indent=2)
     prompt = (
