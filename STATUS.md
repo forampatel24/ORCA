@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-**Milestone 08 — RAG Layer (M8) Completed**
+**Milestone 09 — Frontend Command Center (M9) Completed**
 
 Date: 2026-08-30
 
@@ -72,19 +72,24 @@ Date: 2026-08-30
   - Ingested `4 docs` `incois_advisory_2026.txt 1 chunk + pfz_advisory_2026.pdf 1 chunk (PyMuPDF) + comprehensive_safety_manual.txt 3 chunks (700/100) + marine_safety_guideline.txt 1 chunk` `=6 chunks` `MinIO orca-documents 4 objects` `Qdrant 6 points` `PG docs 4 chunks 6`
   - Retrieval `wind risk 15 -> safety/comprehensive#chunk0 0.775`, `MPA buffer -> safety/marine 0.68`, `PFZ SST -> pfz_advisory 0.674`, `rag_agent` real `INCOIS High Wind 18-22 m/s` `citation`
 
+- **M9: Frontend Command Center (13_FRONTEND_ARCHITECTURE)**
+  - `frontend/src/api/client.ts:1` `axios` `login` `chat/pfz/weather/hazards` `localStorage token` `VITE_API_BASE_URL`, `frontend/src/stores/chatStore.ts:1` `zustand` `messages/loading`, `mapStore.ts:1` `center/pfz/layers`
+  - `frontend/src/components/map/MapView.tsx:1` `MapLibre 4.4` `NavigationControl` `PFZ markers` `selectedPfz amber`, `frontend/src/components/chat/ChatPanel.tsx:1` `ensureLogin test@orca.local` `chat+map sync` `getNearestPFZ -> setPfz/setCenter`
+  - `frontend/src/components/dashboard/RiskCard.tsx:1` `Charts.tsx:1` `ReactECharts` `SST line 27.8-28.5` `Chl bar 0.6-1.1`, `frontend/src/App.tsx:1` `12-col` `header time slider` `evidence drawer` `layer toggles pfz/mpa/eez` `QueryClientProvider` `TanStack`
+  - `vite.config.ts:1` `proxy /api -> 8000`, `package.json:1` `zustand 4.5 + tanstack 5.50 + maplibre 4.4 + echarts 5.5`
+
 ## Working
 
-- `docker compose up -d` `orca-*` 31h healthy on `D:` `9100/6333/6379` + `D:\PostreSQL 5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200` `POST /api/v1/chat 1114 chars` `pfz_observations 6 rows`
-- `M6 engines` `risk VERY_HIGH 165` `pfz 0.776` `sst +1.5` `haversine 33.43` + `M7 GIS` `maritime 1 + protected 2 + geofences 2 + cmfri 8` `ST_Contains true` + `M8 RAG` `4 docs 6 chunks Qdrant 6 MinIO 4` `retrieval 0.775 wind` `citation`
-- `GET /pfz/nearest 4 items 15.2km`, `check_geofence inside Test MPA 0.0`, `cmfri 12500->7100`, `rag INCOIS 18-22 m/s`
+- `docker compose up -d` `orca-*` 31h healthy on `D:` `9100/6333/6379` `2.51GB` + `D:\PostreSQL 5432 PostGIS 3.6.2` `20 tables` + `uvicorn :8000` `1740s` `GET / 200` + `vite :5173` `200` `proxy /api -> 8000` `2.1MB` `738 modules`
+- `M6 engines` `risk VERY_HIGH 165` `pfz 0.776` `sst +1.5` + `M7 GIS` `maritime 1 + protected 2 + geofences 2 + cmfri 8` + `M8 RAG` `4 docs 6 chunks Qdrant 6` `retrieval 0.775` + `M9` `POST /chat via 5173 proxy 200` `PFZ 5 15.2km` `MapLibre markers` `ECharts SST/Chl` `chat+map sync` `Zustand/TanStack`
 
 ## In Progress
 
-- M9 Frontend Command Center (next)
+- M10 Conversational Layer (next)
 
 ## Pending
 
-- M9 Frontend Map+Chat
+- M10 Conversational `there/that zone/tomorrow`
 - M9 Frontend Map+Chat
 - M10 Conversational
 - M11 Security
@@ -102,7 +107,7 @@ Date: 2026-08-30
 
 ## Next Milestone
 
-**M9: Frontend Command Center** - `React+TS+Vite+MapLibre+ECharts` `TanStack+Zustand` `chat+map sync` per `13_FRONTEND_ARCHITECTURE`
+**M10: Conversational Layer** - `multi-turn` `there/that zone/tomorrow` `language detection` per `02_CONV` `03_ARCHITECTURE`
 
 ## Architecture Status
 

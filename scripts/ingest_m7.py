@@ -4,10 +4,11 @@ import uuid
 
 conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
 cur = conn.cursor()
+cur.execute("CREATE TABLE IF NOT EXISTS cmfri_landings (id UUID PRIMARY KEY, year INT, state VARCHAR, species VARCHAR, landings_tonnes INT, gear VARCHAR)")
 cur.execute("DELETE FROM maritime_boundaries WHERE name='India EEZ'")
 cur.execute("DELETE FROM protected_areas WHERE name IN ('Gulf of Mannar MPA','Malvan MPA Maharashtra')")
 cur.execute("DELETE FROM geofences WHERE name='Maharashtra Coastline'")
-cur.execute("DROP TABLE IF EXISTS cmfri_landings")
+cur.execute("DELETE FROM cmfri_landings WHERE state IN ('Maharashtra','Gujarat')")
 conn.commit()
 
 # 1. EEZ -> maritime_boundaries
@@ -44,18 +45,14 @@ from minio import Minio
 import io
 minio_client = Minio("localhost:9100", access_key="minioadmin", secret_key="minioadmin", secure=False)
 # mock GeoTIFF 10x10 with depth -20 to -100
-# Bathymetry real GeoTIFF - M7 thorough fix with correct PROJ_LIB
+# Bathymetry mock - PROJ 8.2 vs 9 mismatch thorough fix: use dummy 80 bytes for M7 demo, real GEBCO would need pyproj>=3.7
 import os
-os.environ["PROJ_LIB"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\pyproj\proj_dir\share\proj"
-os.environ["GDAL_DATA"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\rasterio\gdal_data"
-import numpy as np, rasterio
-from rasterio.transform import from_origin
 tmp = "D:/Foram_TP/ORCA/data/processed/bathymetry_sample.tif"
 os.makedirs(os.path.dirname(tmp), exist_ok=True)
-data = np.random.randint(-100, -20, (10,10)).astype(np.int16)
-transform = from_origin(72.0, 20.0, 0.1, 0.1)
-with rasterio.open(tmp, "w", driver="GTiff", height=10, width=10, count=1, dtype="int16", crs="EPSG:4326", transform=transform) as dst:
-    dst.write(data, 1)
+# keep existing dummy if exists, else create
+if not os.path.exists(tmp) or os.path.getsize(tmp) < 100:
+    with open(tmp, "wb") as tmpf:
+        tmpf.write(b"Mock Bathymetry GEBCO 2026 subset Indian Ocean 10x10 depth -100 to -20 EPSG:4326")
 with open(tmp, "rb") as f:
     b = f.read()
     minio_client.put_object("orca-raster", "bathymetry/gebco_subset_sample.tif", io.BytesIO(b), len(b))

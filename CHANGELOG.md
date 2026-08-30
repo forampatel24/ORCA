@@ -193,3 +193,24 @@ Date: 2026-08-30
 
 ### Fixed
 - Qdrant 1.19 vs 1.13 check_compatibility=False, query_points API, chunking 3 chunks for long manual
+
+---
+
+## Milestone 09 - Frontend Command Center
+
+Date: 2026-08-30
+
+### Added
+- frontend/src/api/client.ts axios + login + chat/pfz/weather/hazards + interceptors
+- frontend/src/stores/chatStore.ts zustand + mapStore.ts center/pfz/layers
+- frontend/src/components/map/MapView.tsx MapLibre 7 markers + NavigationControl
+- frontend/src/components/chat/ChatPanel.tsx login + chat+map sync PFZ fetch + setCenter
+- frontend/src/components/dashboard/RiskCard.tsx + Charts.tsx ECharts SST/Chl
+- frontend/src/App.tsx 12-col Command Center header + time slider + evidence drawer + layer toggles + TanStack QueryClient
+
+### Tests
+- npm run build 2.1MB 738 modules 25s + vite dev 5173 406ms + proxy /api/v1/health 200 + login 200 + pfz 5 15.2km + chat 200 via 5173 proxy
+
+### Fixed
+- ImportMeta env TS2339 -> (import.meta as any).env
+- npm run dev Start-Process npm.cmd vs npm
