@@ -1,19 +1,54 @@
-"""Chat endpoint skeleton - docs 12_API_APEC POST /api/v1/chat."""
-from fastapi import APIRouter, Depends
+"""Chat endpoint - docs 12_API_APEC POST /api/v1/chat + 02_CONV multi-turn."""
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
-import uuid
+import uuid, re
 from app.api.deps import get_current_user
+from app.services.language import detect_language
+from app.services.conversation import save_message, get_history, resolve_references
+
+# M11 Security: prompt injection guard
+INJECTION_PATTERNS = [r"ignore previous instructions", r"system prompt", r"jailbreak", r"delete.*database", r"drop table"]
+
+def check_injection(text: str):
+    for pat in INJECTION_PATTERNS:
+        if re.search(pat, text, re.I):
+            return True
+    return False
+
+# M11 Rate limit simple in-memory (Redis would be better)
+from collections import defaultdict
+import time
+_rate = defaultdict(list)
+def rate_limit(user_id: str, limit=20, window=60):
+    now=time.time()
+    lst=_rate[user_id]
+    # clean
+    _rate[user_id]=[t for t in lst if now-t < window]
+    if len(_rate[user_id]) >= limit:
+        return False
+    _rate[user_id].append(now)
+    return True
 
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
     conversation_id: Optional[str] = None
     location: Optional[dict] = None  # {"lat": 19.1, "lon": 72.8}
     language: Optional[str] = None
+
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v):
+        if check_injection(v):
+            raise ValueError('Potential prompt injection detected')
+        # input validation per 14_SECURITY
+        if len(v.strip()) < 2:
+            raise ValueError('Message too short')
+        return v.strip()
 
 
 class ChatResponse(BaseModel):
@@ -24,18 +59,44 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(req: ChatRequest, current_user = Depends(get_current_user)):
+async def chat(req: ChatRequest, request: Request, current_user = Depends(get_current_user)):
     from app.agents.orchestrator.graph import orchestrator_app
-    # M6 fix: chat now requires JWT per docs 14_SECURITY - use POST /api/v1/auth/login to get token
+    # M11 rate limit 20/min per user
+    if not rate_limit(str(current_user.id)):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=429, detail="Rate limit exceeded 20/min")
+    # M10 language detection + multi-turn - validate UUID
+    lang = req.language or detect_language(req.message)
+    try:
+        uuid.UUID(req.conversation_id) if req.conversation_id else None
+        conv_id = req.conversation_id or str(uuid.uuid4())
+    except:
+        conv_id = str(uuid.uuid4())
+    # save user message
+    save_message(conv_id, str(current_user.id), "user", req.message, lang)
+    history = get_history(conv_id, limit=5)
+    # resolve references using last assistant location (simple)
+    last_loc = None
+    for m in reversed(history):
+        if m["role"] == "assistant" and "Mumbai" in m["content"]:
+            last_loc = "Mumbai"
+            break
+    resolved = resolve_references(req.message, history, last_loc)
     initial_state = {
-        "session_id": req.conversation_id or str(uuid.uuid4()),
-        "user_query": req.message,
+        "session_id": conv_id,
+        "user_query": resolved["resolved_query"],
+        "language": lang,
+        "history": history,
     }
     final_state = await orchestrator_app.ainvoke(initial_state)
+    # save assistant
+    resp_text = final_state.get("final_response", "[Error]")
+    # Respond in same language (M10) - mock: just return lang code, real LLM would translate
+    save_message(conv_id, str(current_user.id), "assistant", resp_text, lang)
     return ChatResponse(
-        conversation_id=initial_state["session_id"],
-        response=final_state.get("final_response", "[Error: No response generated]"),
-        language=req.language or "en",
+        conversation_id=conv_id,
+        response=resp_text,
+        language=lang,
         request_id=str(uuid.uuid4()),
     )
 

@@ -16,20 +16,28 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
     """Extracts the intent from the user query. Falls back to mock if no LLM key."""
     llm = get_llm()
     query = state["user_query"]
+    try:
+        with open("C:/temp/orca_intent.log", "a", encoding="utf-8") as _f:
+            _f.write(f"QUERY repr={repr(query)} lower={repr(query.lower())} contains सुरक्षित={('सुरक्षित' in query.lower())}\n")
+    except: pass
     if llm is None:
-        # Mock fallback for M3/M4 testing without API key
         ql = query.lower()
         intent = "general_knowledge"
-        if "pfz" in ql or "fishing zone" in ql:
+        # English + Marathi/Hindi keywords for M10 Indian languages
+        if any(k in ql for k in ["pfz", "fishing zone", "मत्स्य", "फिशिंग"]):
             intent = "find_pfz"
-        elif "safe" in ql or "safety" in ql:
+        elif any(k in ql for k in ["safe", "safety", "सुरक्षित", "सुरक्षा"]):
             intent = "check_safety"
-        elif "weather" in ql:
+        elif any(k in ql for k in ["weather", "हवामान", "मौसम"]):
             intent = "weather_forecast"
-        elif "route" in ql:
+        elif any(k in ql for k in ["route", "रस्ता", "मार्ग"]):
             intent = "route_planning"
-        location = "Mumbai" if "mumbai" in ql else None
-        time_range = "tomorrow" if "tomorrow" in ql else "today"
+        location = None
+        if any(k in ql for k in ["mumbai", "मुंबई"]):
+            location = "Mumbai"
+        elif "ratnagiri" in ql:
+            location = "Ratnagiri"
+        time_range = "tomorrow" if any(k in ql for k in ["tomorrow", "उद्या"]) else "today"
         return {"intent": intent, "location": location, "time_range": time_range}
     structured_llm = llm.with_structured_output(IntentInterpretation)
     prompt = f"Analyze the following user marine query and extract the intent, location, and time range:\nQuery: '{query}'"
@@ -41,6 +49,14 @@ async def planner_node(state: OrcaState) -> OrcaState:
     llm = get_llm()
     if llm is None:
         intent = state.get("intent", "general_knowledge")
+        # M10 multi-turn: if pronoun and history has previous check_safety, inherit
+        history = state.get("history", [])
+        if intent == "general_knowledge" and history:
+            # look for previous assistant intent via content
+            for m in reversed(history):
+                if m["role"] == "user" and any(k in m["content"].lower() for k in ["safe", "सुरक्षित"]):
+                    intent = "check_safety"
+                    break
         if intent == "find_pfz":
             tasks = [{"agent_name": "marine_agent", "task_description": "Find nearest PFZ", "dependencies": []}]
         elif intent == "check_safety":
