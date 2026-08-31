@@ -4,7 +4,7 @@ import structlog
 
 log = structlog.get_logger()
 
-# Intent -> required sources per docs 08 MVP priority
+# Intent -> required sources per docs 08 MVP priority - Mumbai-only authentic
 INTENT_SOURCES = {
     "pfz_discovery": ["INCOIS PFZ", "pfz"],
     "safety": ["IMD Weather", "INCOIS OSF", "weather", "ocean"],
@@ -14,6 +14,7 @@ INTENT_SOURCES = {
     "route": ["INCOIS OSF", "IMD Weather", "Marine Regions EEZ"],
     "geofence": ["Marine Regions EEZ", "WDPA"],
 }
+MUMBAI_NOTE = "All sources filtered to MUMBAI_BBOX 72.2,18.5,73.2,19.5 - not global"
 
 class DataRegistry:
     def __init__(self, db_session):

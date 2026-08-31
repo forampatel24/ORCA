@@ -47,9 +47,11 @@ def ingest_knowledge(data_dir: str = "D:/Foram_TP/ORCA/data/knowledge"):
 
     files = list(Path(data_dir).rglob("*.*"))
     files = [f for f in files if f.suffix.lower() in [".txt",".pdf",".md",".docx"] and f.is_file()]
+    # Mumbai-only: prioritize Mumbai/Maharashtra docs, skip non-Mumbai if region filter strict
     total_chunks = 0
     for filepath in files:
-        # 1. MinIO raw
+        # 1. MinIO raw - tag Mumbai region in payload for Qdrant Mumbai filter
+        is_mumbai = "mumbai" in str(filepath).lower() or "maharashtra" in str(filepath).lower() or filepath.parent.name.lower() in ["safety","marine_advisories","fisheries","regulations"]
         key = f"documents/{filepath.parent.name}/{filepath.name}"
         try:
             with open(filepath, "rb") as fh:
@@ -89,7 +91,8 @@ def ingest_knowledge(data_dir: str = "D:/Foram_TP/ORCA/data/knowledge"):
                     "text": ch["text"][:500],
                     "chunk_index": ch["chunk_index"],
                     "language": "en",
-                    "object_key": key
+                    "object_key": key,
+                    "region": "mumbai" if is_mumbai else "global"
                 }
             ))
         qdrant.upsert(collection_name="orca_knowledge", points=points)

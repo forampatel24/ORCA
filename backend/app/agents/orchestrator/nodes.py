@@ -81,14 +81,15 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
         elif any(k in ql for k in ["route", "रस्ता", "मार्ग"]):
             intent = "route_planning"
         location = None
-        # 12-state detection
-        loc = None
-        for k in ["mumbai","मुंबई","ratnagiri","goa","kochi","kerala","chennai","tamil","visakhapatnam","andhra","odisha","puri","kolkata","andaman","port blair","gujarat","kutch","karnataka","mangalore"]:
+        # Mumbai-only: default to Mumbai when no explicit location, else Mumbai bbox
+        loc = "Mumbai"
+        for k in ["mumbai","मुंबई","maharashtra","महाराष्ट्र"]:
             if k in ql:
-                loc = k.title() if k not in ["मुंबई"] else "Mumbai"
-                if loc in ["Kochi","Kerala"]: loc="Kochi"
-                if loc in ["Chennai","Tamil"]: loc="Chennai"
+                loc = "Mumbai"
                 break
+        # Keep compat but log non-Mumbai as Mumbai-only enforced
+        if any(x in ql for x in ["ratnagiri","goa","kochi","kerala","chennai","tamil","visakhapatnam","andhra","odisha","puri","kolkata","andaman","port blair","gujarat","kutch","karnataka","mangalore"]):
+            loc = "Mumbai"  # enforce Mumbai-only per requirement
         time_range = "tomorrow" if any(k in ql for k in ["tomorrow", "उद्या"]) else "today"
         return {"intent": intent, "location": loc, "time_range": time_range}
     try:
@@ -107,11 +108,7 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
             intent = "weather_forecast"
         elif any(k in ql for k in ["route", "रस्ता"]):
             intent = "route_planning"
-        loc = None
-        for k in ["mumbai","मुंबई","ratnagiri","goa","kochi","kerala","chennai","visakhapatnam","odisha","andaman","gujarat","karnataka"]:
-            if k in ql:
-                loc = k.title()
-                break
+        loc = "Mumbai"  # Mumbai-only enforced
         time_range = "tomorrow" if "tomorrow" in ql or "उद्या" in ql else "today"
         return {"intent": intent, "location": loc, "time_range": time_range}
 

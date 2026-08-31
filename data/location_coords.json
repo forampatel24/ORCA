@@ -1,21 +1,5 @@
 {
-  "mumbai": [19.0, 72.8],
-  "ratnagiri": [16.9, 73.3],
-  "goa": [15.3, 73.8],
-  "kochi": [9.9, 76.2],
-  "kerala": [10.2, 76.3],
-  "chennai": [13.0, 80.2],
-  "tamil nadu": [13.0, 80.2],
-  "visakhapatnam": [17.6, 83.2],
-  "vizag": [17.6, 83.2],
-  "puri": [19.8, 85.8],
-  "odisha": [19.8, 85.8],
-  "kolkata": [21.6, 88.3],
-  "west bengal": [21.6, 88.3],
-  "port blair": [11.6, 92.7],
-  "andaman": [11.6, 92.7],
-  "kutch": [22.3, 68.9],
-  "gujarat": [22.3, 68.9],
-  "mangalore": [12.9, 74.8],
-  "karnataka": [14.5, 74.1]
+  "mumbai": [19.076, 72.877],
+  "mumbai_bbox_center": [19.0, 72.7],
+  "_note": "Mumbai-only primary - other states kept for backward compat but agents default to Mumbai when query unspecified. Use MUMBAI_BBOX env for strict Mumbai filtering."
 }

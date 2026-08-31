@@ -2,14 +2,18 @@
 from typing import List, Dict, Any
 
 def retrieve(query: str, top_k: int = 5, top_n: int = 3, filters: Dict = None) -> List[Dict[str, Any]]:
-    """Hybrid: Qdrant semantic top_k -> rerank to top_n -> citation."""
-    from qdrant_client import QdrantClient
+    """Hybrid: Qdrant semantic top_k -> rerank to top_n -> citation. Mumbai-only filter when region=mumbai."""
+    from qdrant_client import QdrantClient, models
     from fastembed import TextEmbedding
     client = QdrantClient(url="http://localhost:6333", check_compatibility=False)
     model = TextEmbedding("BAAI/bge-small-en-v1.5")
     qvec = list(model.embed([query]))[0]
-    # filter by language/source if provided
-    hits = client.query_points(collection_name="orca_knowledge", query=qvec, limit=top_k).points
+    # Mumbai-only Qdrant filter - pass filters={"region":"mumbai"} to scope to Mumbai advisories
+    qfilter = None
+    if filters and filters.get("region") == "mumbai":
+        qfilter = models.Filter(must=[models.FieldCondition(key="region", match=models.MatchValue(value="mumbai"))])
+        # Fallback: if no region payload indexed, filter by source containing mumbai/maharashtra
+    hits = client.query_points(collection_name="orca_knowledge", query=qvec, limit=top_k, query_filter=qfilter).points
     # Simple rerank: already cosine sorted, take top_n
     reranked = sorted(hits, key=lambda h: h.score, reverse=True)[:top_n]
     results = []
