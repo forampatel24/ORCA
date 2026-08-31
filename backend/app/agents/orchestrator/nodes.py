@@ -5,30 +5,31 @@ from app.agents.orchestrator.state import OrcaState
 from app.agents.orchestrator.schemas import IntentInterpretation, TaskPlan
 
 def get_llm():
-    """Provider-aware LLM factory — auto-detects Groq (gsk_) / Gemini (AIza) else OpenAI.
+    """Provider-aware LLM factory — auto-detects Groq (gsk_) / Gemini (AIza/AQ.) else OpenAI.
     Respects LLM_PROVIDER/LMM_MODEL from .env. No key -> None -> mock fallback."""
-    key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+    key = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
     if not key:
         return None
     provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
     model = (os.getenv("LLM_MODEL") or "").strip()
-    # auto-detect if provider not explicit
+    # auto-detect if provider not explicit — Gemini now also uses AQ. prefix (2025+)
     if not provider:
         if key.startswith("gsk_"):
             provider = "groq"
-        elif key.startswith("AIza"):
+        elif key.startswith("AIza") or key.startswith("AQ."):
             provider = "gemini"
         else:
-            provider = "openai"
+            # default to gemini for long non-openai keys when user says Gemini
+            provider = "gemini" if len(key) > 30 and not key.startswith("sk-") else "openai"
     # sane model defaults per provider
     if provider == "groq" and ("gpt-" in model or not model):
         model = model if "llama" in model or "mixtral" in model or "gemma" in model else "llama-3.3-70b-versatile"
         if not model:
             model = "llama-3.3-70b-versatile"
     elif provider == "gemini" and ("gpt-" in model or "llama" in model or not model):
-        model = "gemini-2.0-flash" if not model or "gpt" in model or "llama" in model else model
+        model = "gemini-3-flash-preview" if not model or "gpt" in model or "llama" in model else model
         if not model:
-            model = "gemini-2.0-flash"
+            model = "gemini-3-flash-preview"
     elif provider == "openai" and not model:
         model = "gpt-4o-mini"
 
@@ -208,4 +209,16 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
         f"Synthesize this evidence into a final, helpful, and concise response to the user."
     )
     response = await llm.ainvoke(prompt)
-    return {"final_response": response.content}
+    content = response.content
+    # Google returns list of dicts, OpenAI/Groq return string — normalize to string
+    if isinstance(content, list):
+        texts = []
+        for part in content:
+            if isinstance(part, dict) and "text" in part:
+                texts.append(part["text"])
+            elif isinstance(part, str):
+                texts.append(part)
+            else:
+                texts.append(str(part))
+        content = "\n".join(texts)
+    return {"final_response": str(content)}
