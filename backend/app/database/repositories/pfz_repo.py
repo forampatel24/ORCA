@@ -6,9 +6,9 @@ from datetime import datetime
 
 class PFZRepository:
     def get_nearest(self, db: Session, latitude: float, longitude: float, radius_km: float = 50.0, limit: int = 5) -> List[Dict[str, Any]]:
-        # PostGIS ST_DWithin uses meters for geography type
+        # Distinct by location so overlapping duplicates don't stack as one dot
         query = text("""
-            SELECT 
+            SELECT DISTINCT ON (latitude, longitude)
                 id, 
                 observation_time, 
                 valid_from, 
@@ -18,7 +18,7 @@ class PFZRepository:
                 metadata
             FROM pfz_observations
             WHERE ST_DWithin(geometry, ST_GeographyFromText(:point), :radius_m)
-            ORDER BY distance_km ASC
+            ORDER BY latitude, longitude, distance_km ASC
             LIMIT :limit
         """)
         point_wkt = f"POINT({longitude} {latitude})"

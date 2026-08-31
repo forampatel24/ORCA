@@ -38,6 +38,16 @@ export default function LeafletMap() {
       if(d.features && d.features.length>0) setMumbaiCoast(d)
       else setMumbaiCoast(null)
     }).catch(()=> setMumbaiCoast(null))
+    // Auto-load PFZ for Mumbai so toggle shows difference even before chat
+    import('../../api/client').then(({ getNearestPFZ }) => {
+      getNearestPFZ(19.076, 72.877, 80).then((d:any)=>{
+        if(d.items?.length){
+          const { setPfz } = useMapStore.getState()
+          // Deduplicate by lat/lon already in repo, but ensure distinct
+          setPfz(d.items)
+        }
+      }).catch(()=>{})
+    })
   }, [])
 
   const pfzIcon = (sel:boolean) => L.divIcon({ className:'', html:`<div style="width:${sel?14:12}px;height:${sel?14:12}px;background:${sel?'#f59e0b':'#0ea5e9'};border-radius:50%;border:2px solid white;box-shadow:0 0 4px #000"></div>`, iconSize:[12,12] as any, iconAnchor:[6,6] as any })
