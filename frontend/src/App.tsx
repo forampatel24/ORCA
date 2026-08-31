@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ChatPanel from './components/chat/ChatPanel'
-import MapView from './components/map/MapView'
+import LeafletMap from './components/map/LeafletMap'
 import { SstChart, ChlorophyllChart } from './components/dashboard/Charts'
 import { useMapStore } from './stores/mapStore'
 import { useChatStore } from './stores/chatStore'
@@ -17,7 +17,7 @@ function Dashboard() {
       <header className="border-b border-slate-800 p-4 flex justify-between">
         <div>
           <h1 className="text-xl font-bold">ORCA — Marine Intelligence Command Center</h1>
-          <p className="text-xs text-slate-400">M9 • MapLibre + ECharts + Chat+Map Sync • All data on D:</p>
+          <p className="text-xs text-slate-400">M9 • Leaflet OSM + ECharts + Chat+Map Sync • 32 PFZ Mumbai pilot</p>
         </div>
         <div className="text-xs text-slate-500">PFZ {pfz.length} | Time: <input type="date" defaultValue="2026-08-30" className="bg-slate-800 rounded px-2 py-1" /> <button className="ml-2 px-2 py-1 bg-slate-800 rounded">&lt; Prev</button></div>
       </header>
@@ -40,7 +40,7 @@ function Dashboard() {
             <span className="ml-auto text-slate-500">Selected: {selectedPfz?.sector || 'none'} {selectedPfz?.distance_km?.toFixed(1) || ''} km</span>
           </div>
           <div className="h-[400px]">
-            <MapView />
+            <LeafletMap />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="border border-slate-800 rounded p-3">

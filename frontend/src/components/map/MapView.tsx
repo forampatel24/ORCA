@@ -18,7 +18,22 @@ export default function MapView() {
     })
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
     map.on('load', () => {
-      // Load India coastline/EEZ from local public files (imported, not hard-coded)
+      // ORCA footprint: India states + cities + EEZ/coast — all from local public/ (data-driven)
+      fetch('/india_states.geojson').then(r=>r.json()).then(data=>{
+        map.addSource('india-states', { type: 'geojson', data })
+        map.addLayer({ id: 'india-states-fill', type: 'fill', source: 'india-states', paint: { 'fill-color': '#1e293b', 'fill-opacity': 0.35 } })
+        map.addLayer({ id: 'india-states-line', type: 'line', source: 'india-states', paint: { 'line-color': '#94a3b8', 'line-width': 1 } })
+        map.addLayer({ id: 'india-states-hover', type: 'fill', source: 'india-states', paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0 } })
+        // hover highlight + click popup
+        map.on('mousemove','india-states-hover', e=>{
+          if(e.features?.[0]) map.getCanvas().style.cursor='pointer'
+        })
+        map.on('mouseleave','india-states-hover', ()=>{ map.getCanvas().style.cursor='' })
+        map.on('click','india-states-fill', e=>{
+          const f:any=e.features?.[0]; if(!f) return;
+          new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<div style="color:#0f172a"><b>${f.properties?.NAME_1 || f.properties?.ST_NM || 'State'}</b></div>`).addTo(map)
+        })
+      }).catch(()=>{})
       fetch('/india_coastline.geojson').then(r=>r.json()).then(data=>{
         map.addSource('india-coast', { type: 'geojson', data })
         map.addLayer({ id: 'india-coast-line', type: 'line', source: 'india-coast', paint: { 'line-color': '#38bdf8', 'line-width': 2 } })
@@ -28,6 +43,11 @@ export default function MapView() {
         map.addLayer({ id: 'india-eez-fill', type: 'fill', source: 'india-eez', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.08 } })
         map.addLayer({ id: 'india-eez-line', type: 'line', source: 'india-eez', paint: { 'line-color': '#0ea5e9', 'line-width': 1, 'line-dasharray': [4,4] } })
       }).catch(()=>{})
+      // cities via base style labels (not hard-coded) — no manual points
+      // ORCA Mumbai pilot highlight box 18.5-20.5 / 72-73.5
+      map.addSource('orca-mumbai-box', { type:'geojson', data:{ type:'Feature', geometry:{ type:'Polygon', coordinates:[[[72,18.5],[73.5,18.5],[73.5,20.5],[72,20.5],[72,18.5]]] }, properties:{} } as any })
+      map.addLayer({ id:'orca-box-fill', type:'fill', source:'orca-mumbai-box', paint:{ 'fill-color':'#22d3ee','fill-opacity':0.07 } })
+      map.addLayer({ id:'orca-box-line', type:'line', source:'orca-mumbai-box', paint:{ 'line-color':'#22d3ee','line-width':2,'line-dasharray':[6,4] } })
     })
     mapRef.current = map
   }, [])
@@ -47,11 +67,11 @@ export default function MapView() {
         new maplibregl.Marker({ element: el }).setLngLat([p.longitude, p.latitude]).addTo(map)
       })
     }
-    // EEZ/Coast visibility toggle
+    // layer toggles
     try {
-      if (map.getLayer('india-eez-fill')) map.setLayoutProperty('india-eez-fill','visibility', layers.eez? 'visible':'none')
-      if (map.getLayer('india-eez-line')) map.setLayoutProperty('india-eez-line','visibility', layers.eez? 'visible':'none')
-      if (map.getLayer('india-coast-line')) map.setLayoutProperty('india-coast-line','visibility', layers.pfz? 'visible':'none')
+      for(const l of ['india-states-fill','india-states-line','india-eez-fill','india-eez-line','india-coast-line','orca-box-fill','orca-box-line']){
+        if(map.getLayer(l)) map.setLayoutProperty(l,'visibility', l.includes('states')? (layers.mpa?'visible':'none') : (l.includes('eez')? (layers.eez?'visible':'none') : (layers.pfz?'visible':'none')))
+      }
     } catch {}
   }, [pfz, selectedPfz, layers])
 
