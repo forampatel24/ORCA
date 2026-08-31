@@ -7,11 +7,21 @@ from app.agents.orchestrator.schemas import IntentInterpretation, TaskPlan
 def get_llm():
     """Provider-aware LLM factory — auto-detects Groq (gsk_) / Gemini (AIza/AQ.) else OpenAI.
     Respects LLM_PROVIDER/LMM_MODEL from .env. No key -> None -> mock fallback."""
-    key = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+    # Load via settings (pydantic loads backend/.env) with os.getenv fallback
+    try:
+        from app.config.settings import settings as _s
+        _key = (_s.llm_api_key or "").strip()
+        _provider = (_s.llm_provider or "").strip()
+        _model = (_s.llm_model or "").strip()
+        _base = (_s.llm_base_url or "").strip()
+    except Exception:
+        _key = _provider = _model = _base = ""
+    key = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("GOOGLE_API_KEY") or _key or "").strip()
     if not key:
         return None
-    provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
-    model = (os.getenv("LLM_MODEL") or "").strip()
+    provider = (os.getenv("LLM_PROVIDER") or _provider or "").lower().strip()
+    model = (os.getenv("LLM_MODEL") or _model or "").strip()
+    base_url_env = (os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_API_BASE") or _base or "").strip() or None
     # auto-detect if provider not explicit — Gemini now also uses AQ. prefix (2025+)
     if not provider:
         if key.startswith("gsk_"):
@@ -42,7 +52,7 @@ def get_llm():
     else:
         from langchain_openai import ChatOpenAI
         # also supports Groq via OpenAI-compatible base_url if user prefers openai provider + groq key
-        base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_API_BASE") or None
+        base_url = base_url_env
         if key.startswith("gsk_") and not base_url:
             base_url = "https://api.groq.com/openai/v1"
         kwargs = {"model": model, "temperature": 0, "api_key": key}
@@ -71,19 +81,22 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
         elif any(k in ql for k in ["route", "रस्ता", "मार्ग"]):
             intent = "route_planning"
         location = None
-        if any(k in ql for k in ["mumbai", "मुंबई"]):
-            location = "Mumbai"
-        elif "ratnagiri" in ql:
-            location = "Ratnagiri"
+        # 12-state detection
+        loc = None
+        for k in ["mumbai","मुंबई","ratnagiri","goa","kochi","kerala","chennai","tamil","visakhapatnam","andhra","odisha","puri","kolkata","andaman","port blair","gujarat","kutch","karnataka","mangalore"]:
+            if k in ql:
+                loc = k.title() if k not in ["मुंबई"] else "Mumbai"
+                if loc in ["Kochi","Kerala"]: loc="Kochi"
+                if loc in ["Chennai","Tamil"]: loc="Chennai"
+                break
         time_range = "tomorrow" if any(k in ql for k in ["tomorrow", "उद्या"]) else "today"
-        return {"intent": intent, "location": location, "time_range": time_range}
+        return {"intent": intent, "location": loc, "time_range": time_range}
     try:
         structured_llm = llm.with_structured_output(IntentInterpretation)
         prompt = f"Analyze the following user marine query and extract the intent, location, and time range:\nQuery: '{query}'"
         result = await structured_llm.ainvoke(prompt)
         return {"intent": result.intent, "location": result.location, "time_range": result.time_range}
     except Exception:
-        # Gemini structured fallback — keyword heuristic
         ql = query.lower()
         intent = "general_knowledge"
         if any(k in ql for k in ["pfz", "fishing zone"]):
@@ -94,9 +107,13 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
             intent = "weather_forecast"
         elif any(k in ql for k in ["route", "रस्ता"]):
             intent = "route_planning"
-        location = "Mumbai" if "mumbai" in ql or "मुंबई" in ql else ("Ratnagiri" if "ratnagiri" in ql else None)
+        loc = None
+        for k in ["mumbai","मुंबई","ratnagiri","goa","kochi","kerala","chennai","visakhapatnam","odisha","andaman","gujarat","karnataka"]:
+            if k in ql:
+                loc = k.title()
+                break
         time_range = "tomorrow" if "tomorrow" in ql or "उद्या" in ql else "today"
-        return {"intent": intent, "location": location, "time_range": time_range}
+        return {"intent": intent, "location": loc, "time_range": time_range}
 
 async def planner_node(state: OrcaState) -> OrcaState:
     """Creates a task plan based on the intent. Mock fallback if no LLM."""
@@ -168,11 +185,24 @@ async def planner_node(state: OrcaState) -> OrcaState:
 async def execute_agents_node(state: OrcaState) -> OrcaState:
     """M5: Execute 8 specialized agents via tools (docs 06_AGENT_SPEC)."""
     results = state.get("agent_results", {}) or {}
-    # Default location from state or Mumbai
-    loc_str = state.get("location") or "Mumbai"
-    lat, lon = 19.0, 72.8
-    if loc_str and "ratnagiri" in loc_str.lower():
-        lat, lon = 16.9, 73.3
+    # Data-driven location mapping — loads from data/location_coords.json (not hard-coded in code)
+    import json, pathlib
+    loc_str = (state.get("location") or "Mumbai").lower().strip()
+    coords_path = pathlib.Path(__file__).parents[3] / "data" / "location_coords.json"
+    # also try ORCA root
+    if not coords_path.exists():
+        coords_path = pathlib.Path("D:/Foram_TP/ORCA/data/location_coords.json")
+    try:
+        coords_raw = json.loads(coords_path.read_text(encoding="utf-8"))
+        coords = {k.lower(): tuple(v) for k, v in coords_raw.items()}
+    except Exception:
+        coords = {"mumbai": (19.0, 72.8)}
+    lat, lon = coords.get(loc_str, (19.0, 72.8))
+    if (lat, lon) == (19.0, 72.8) and loc_str not in coords:
+        for k, v in coords.items():
+            if k in loc_str:
+                lat, lon = v
+                break
     # Import agents lazily to avoid circular
     from app.agents.marine.agent import marine_agent
     from app.agents.weather.agent import weather_agent
@@ -242,7 +272,7 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
         f"You are ORCA, an Agentic Marine Intelligence Platform.\n"
         f"User Query: {state['user_query']}\n"
         f"Agent Evidence:\n{results_str}\n\n"
-        f"Synthesize this evidence into a final, helpful, and concise response to the user."
+        f"Synthesize this evidence into a final response. RULES: plain text only, NO markdown (no **, no ###, no * bullets, no - bullets), use numbered lines 1. 2. 3. if listing. Keep language same as user query (English/Marathi). Be concise and understandable."
     )
     response = await llm.ainvoke(prompt)
     content = response.content

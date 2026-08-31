@@ -22,17 +22,25 @@ export default function ChatPanel() {
     setLoading(true)
     try {
       await ensureLogin()
-      const data = await chat(userMsg, { lat: 19.0, lon: 72.8 })
-      addMessage({ role: 'assistant', content: data.response, evidence: data.evidence, risk: data.risk })
-      // sync map: fetch PFZ and highlight
+      const data = await chat(userMsg)
+      let txt = (data.response||"").replace(/\*\*/g,"").replace(/###/g,"")
+      addMessage({ role: 'assistant', content: txt, evidence: data.evidence, risk: data.risk })
+      // map sync — use backend-provided center (from data/location_coords.json via PostGIS) not hard-coded
       try {
-        const pfzData = await getNearestPFZ(19.0, 72.8, 50)
-        setPfz(pfzData.items || [])
-        if (pfzData.items?.[0]) {
-          setSelected(pfzData.items[0])
-          setCenter([pfzData.items[0].longitude, pfzData.items[0].latitude])
+        let lat=19.0, lon=72.8
+        if (data.center && data.center.length===2) { lon=data.center[0]; lat=data.center[1] }
+        else if (data.location) {
+          // fallback: if backend didn't send center, use PFZ items centroid
+          lon=72.8; lat=19.0
         }
-      } catch {}
+        const pfzData = await getNearestPFZ(lat, lon, 150)
+        setPfz(pfzData.items || [])
+        if (pfzData.items?.length) {
+          // show all PFZ for that region, center on map-provided center
+          setSelected(pfzData.items[0])
+          setCenter(data.center || [pfzData.items[0].longitude, pfzData.items[0].latitude])
+        } else if (data.center) setCenter(data.center as any)
+      } catch { if(data.center) setCenter(data.center as any) }
     } catch (e: any) {
       addMessage({ role: 'assistant', content: `Error: ${e.response?.data?.detail || e.message}` })
     } finally {

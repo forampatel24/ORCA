@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [{
+    "type": "Feature",
+    "properties": {"name": "India EEZ", "country": "India", "boundary_type": "EEZ"},
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[[68.0, 8.0],[75.0, 8.0],[75.0, 24.0],[68.0, 24.0],[68.0, 8.0]]]
+    }
+  }]
+}

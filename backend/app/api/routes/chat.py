@@ -56,6 +56,9 @@ class ChatResponse(BaseModel):
     response: str
     language: str
     request_id: str
+    intent: Optional[str] = None
+    location: Optional[str] = None
+    center: Optional[list] = None  # [lon, lat] for map
 
 
 @router.post("/", response_model=ChatResponse)
@@ -91,13 +94,33 @@ async def chat(req: ChatRequest, request: Request, current_user = Depends(get_cu
     final_state = await orchestrator_app.ainvoke(initial_state)
     # save assistant
     resp_text = final_state.get("final_response", "[Error]")
-    # Respond in same language (M10) - mock: just return lang code, real LLM would translate
+    # strip markdown if any slipped through (frontend also strips)
+    import re as _re
+    resp_text = _re.sub(r"\*\*", "", resp_text)
+    resp_text = _re.sub(r"###", "", resp_text)
     save_message(conv_id, str(current_user.id), "assistant", resp_text, lang)
+    # derive map center from orchestrator location via data/location_coords.json
+    import json, pathlib
+    loc = (final_state.get("location") or "").lower()
+    center = None
+    if loc:
+        try:
+            p = pathlib.Path("D:/Foram_TP/ORCA/data/location_coords.json")
+            coords = json.loads(p.read_text(encoding="utf-8"))
+            for k, v in coords.items():
+                if k.lower() in loc or loc in k.lower():
+                    center = [v[1], v[0]]  # [lon, lat]
+                    break
+        except Exception:
+            pass
     return ChatResponse(
         conversation_id=conv_id,
         response=resp_text,
         language=lang,
         request_id=str(uuid.uuid4()),
+        intent=final_state.get("intent"),
+        location=final_state.get("location"),
+        center=center,
     )
 
 @router.post("/stream")
