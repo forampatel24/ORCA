@@ -23,10 +23,11 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(default="minioadmin")
     minio_secure: bool = Field(default=False)
 
-    # LLM - shared across all 8 agents (docs 06_AGENT_SPEC)
+    # LLM - shared across all 8 agents (docs 06_AGENT_SPEC) — auto-detect gsk_->groq AIza->gemini else openai
     llm_api_key: str = Field(default="")
     llm_model: str = Field(default="gpt-4o-mini")
-    llm_provider: str = Field(default="openai")
+    llm_provider: str = Field(default="")  # openai|groq|gemini — empty=auto-detect
+    llm_base_url: str = Field(default="")
 
     # JWT
     jwt_secret: str = Field(default="change-me-in-production")

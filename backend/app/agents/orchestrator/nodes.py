@@ -1,16 +1,53 @@
 import json
+import os
 from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
 from app.agents.orchestrator.state import OrcaState
 from app.agents.orchestrator.schemas import IntentInterpretation, TaskPlan
-import os
 
 def get_llm():
-    import os
-    key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+    """Provider-aware LLM factory — auto-detects Groq (gsk_) / Gemini (AIza) else OpenAI.
+    Respects LLM_PROVIDER/LMM_MODEL from .env. No key -> None -> mock fallback."""
+    key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
     if not key:
         return None
-    return ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=key)
+    provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
+    model = (os.getenv("LLM_MODEL") or "").strip()
+    # auto-detect if provider not explicit
+    if not provider:
+        if key.startswith("gsk_"):
+            provider = "groq"
+        elif key.startswith("AIza"):
+            provider = "gemini"
+        else:
+            provider = "openai"
+    # sane model defaults per provider
+    if provider == "groq" and ("gpt-" in model or not model):
+        model = model if "llama" in model or "mixtral" in model or "gemma" in model else "llama-3.3-70b-versatile"
+        if not model:
+            model = "llama-3.3-70b-versatile"
+    elif provider == "gemini" and ("gpt-" in model or "llama" in model or not model):
+        model = "gemini-2.0-flash" if not model or "gpt" in model or "llama" in model else model
+        if not model:
+            model = "gemini-2.0-flash"
+    elif provider == "openai" and not model:
+        model = "gpt-4o-mini"
+
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+        return ChatGroq(model=model, temperature=0, api_key=key)  # type: ignore
+    elif provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=key)  # type: ignore
+    else:
+        from langchain_openai import ChatOpenAI
+        # also supports Groq via OpenAI-compatible base_url if user prefers openai provider + groq key
+        base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_API_BASE") or None
+        if key.startswith("gsk_") and not base_url:
+            base_url = "https://api.groq.com/openai/v1"
+        kwargs = {"model": model, "temperature": 0, "api_key": key}
+        if base_url:
+            kwargs["base_url"] = base_url  # type: ignore
+        return ChatOpenAI(**kwargs)  # type: ignore
 
 async def analyze_intent_node(state: OrcaState) -> OrcaState:
     """Extracts the intent from the user query. Falls back to mock if no LLM key."""
