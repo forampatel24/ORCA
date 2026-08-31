@@ -77,10 +77,26 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
             location = "Ratnagiri"
         time_range = "tomorrow" if any(k in ql for k in ["tomorrow", "उद्या"]) else "today"
         return {"intent": intent, "location": location, "time_range": time_range}
-    structured_llm = llm.with_structured_output(IntentInterpretation)
-    prompt = f"Analyze the following user marine query and extract the intent, location, and time range:\nQuery: '{query}'"
-    result = await structured_llm.ainvoke(prompt)
-    return {"intent": result.intent, "location": result.location, "time_range": result.time_range}
+    try:
+        structured_llm = llm.with_structured_output(IntentInterpretation)
+        prompt = f"Analyze the following user marine query and extract the intent, location, and time range:\nQuery: '{query}'"
+        result = await structured_llm.ainvoke(prompt)
+        return {"intent": result.intent, "location": result.location, "time_range": result.time_range}
+    except Exception:
+        # Gemini structured fallback — keyword heuristic
+        ql = query.lower()
+        intent = "general_knowledge"
+        if any(k in ql for k in ["pfz", "fishing zone"]):
+            intent = "find_pfz"
+        elif any(k in ql for k in ["safe", "safety", "सुरक्षित"]):
+            intent = "check_safety"
+        elif any(k in ql for k in ["weather", "हवामान"]):
+            intent = "weather_forecast"
+        elif any(k in ql for k in ["route", "रस्ता"]):
+            intent = "route_planning"
+        location = "Mumbai" if "mumbai" in ql or "मुंबई" in ql else ("Ratnagiri" if "ratnagiri" in ql else None)
+        time_range = "tomorrow" if "tomorrow" in ql or "उद्या" in ql else "today"
+        return {"intent": intent, "location": location, "time_range": time_range}
 
 async def planner_node(state: OrcaState) -> OrcaState:
     """Creates a task plan based on the intent. Mock fallback if no LLM."""
@@ -114,20 +130,40 @@ async def planner_node(state: OrcaState) -> OrcaState:
         else:
             tasks = [{"agent_name": "rag_agent", "task_description": "Retrieve knowledge", "dependencies": []}]
         return {"plan": tasks, "required_agents": list(set(t["agent_name"] for t in tasks))}
-    structured_llm = llm.with_structured_output(TaskPlan)
-    prompt = (
-        f"You are the ORCA orchestrator. Create a multi-agent execution plan.\n"
-        f"Query: '{state['user_query']}'\n"
-        f"Intent: {state['intent']}\n"
-        f"Location: {state['location']}\n"
-        f"Time: {state['time_range']}\n\n"
-        f"Available agents: 'weather_agent', 'marine_agent', 'risk_agent', 'rag_agent', 'routing_agent', 'geospatial_agent'.\n"
-        f"Assign specific tasks to the necessary agents. Determine if any tasks depend on others."
-    )
-    plan = await structured_llm.ainvoke(prompt)
-    plan_dicts = [{"agent_name": t.agent_name, "task_description": t.task_description, "dependencies": t.dependencies} for t in plan.tasks]
-    required_agents = list(set([t.agent_name for t in plan.tasks]))
-    return {"plan": plan_dicts, "required_agents": required_agents}
+    try:
+        structured_llm = llm.with_structured_output(TaskPlan)
+        prompt = (
+            f"You are the ORCA orchestrator. Create a multi-agent execution plan.\n"
+            f"Query: '{state['user_query']}'\n"
+            f"Intent: {state['intent']}\n"
+            f"Location: {state['location']}\n"
+            f"Time: {state['time_range']}\n\n"
+            f"Available agents: 'weather_agent', 'marine_agent', 'risk_agent', 'rag_agent', 'routing_agent', 'geospatial_agent'.\n"
+            f"Assign specific tasks to the necessary agents. Determine if any tasks depend on others."
+        )
+        plan = await structured_llm.ainvoke(prompt)
+        plan_dicts = [{"agent_name": t.agent_name, "task_description": t.task_description, "dependencies": t.dependencies} for t in plan.tasks]
+        required_agents = list(set([t.agent_name for t in plan.tasks]))
+        return {"plan": plan_dicts, "required_agents": required_agents}
+    except Exception:
+        # fallback to mock logic
+        intent = state.get("intent", "general_knowledge")
+        if intent == "find_pfz":
+            tasks = [{"agent_name": "marine_agent", "task_description": "Find nearest PFZ", "dependencies": []}]
+        elif intent == "check_safety":
+            tasks = [
+                {"agent_name": "weather_agent", "task_description": "Get weather + wind", "dependencies": []},
+                {"agent_name": "marine_agent", "task_description": "Get wave/ocean", "dependencies": []},
+                {"agent_name": "geospatial_agent", "task_description": "Check geofences", "dependencies": []},
+                {"agent_name": "risk_agent", "task_description": "Assess risk", "dependencies": ["weather_agent","marine_agent","geospatial_agent"]},
+            ]
+        elif intent == "weather_forecast":
+            tasks = [{"agent_name": "weather_agent", "task_description": "Get weather forecast", "dependencies": []}]
+        elif intent == "route_planning":
+            tasks = [{"agent_name": "weather_agent", "task_description": "Get weather", "dependencies": []}, {"agent_name": "routing_agent", "task_description": "Optimize route", "dependencies": ["weather_agent"]}]
+        else:
+            tasks = [{"agent_name": "rag_agent", "task_description": "Retrieve knowledge", "dependencies": []}]
+        return {"plan": tasks, "required_agents": list(set(t["agent_name"] for t in tasks))}
 
 async def execute_agents_node(state: OrcaState) -> OrcaState:
     """M5: Execute 8 specialized agents via tools (docs 06_AGENT_SPEC)."""
