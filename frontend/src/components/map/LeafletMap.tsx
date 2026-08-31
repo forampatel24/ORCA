@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, GeoJSON as RLGeoJSON, Marker, Popup, Rectangle, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON as RLGeoJSON, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useMapStore } from '../../stores/mapStore'
@@ -32,16 +32,12 @@ export default function LeafletMap() {
     fetch('/india_states.geojson').then(r=>r.json()).then(setStates).catch(()=>{})
     // NO hardcoded file - fetch authentic from PostGIS via backend bbox API
     const bbox = '72.2,18.5,73.2,19.5'
-    fetch(`/api/v1/geospatial/eez?bbox=${bbox}`).then(r=>r.json()).then(setEez).catch(()=> fetch('/india_eez.geojson').then(r=>r.json()).then(setEez).catch(()=>{}))
-    fetch(`/api/v1/geospatial/mpa?bbox=${bbox}`).then(r=>r.json()).then(setMumbaiMpa).catch(()=>{})
-    fetch(`/api/v1/geospatial/coastline?bbox=${bbox}`).then(r=>r.json()).then(d=> {
-      // If DB has no coastline (empty FeatureCollection), fallback to OSM tiles coastline (already visible in base map)
-      // Don't use hardcoded 3-point dummy - check feature count
+    fetch(`/api/v1/geospatial/eez?bbox=${bbox}`).then(r=>r.ok?r.json():Promise.reject()).then(setEez).catch(()=>{})
+    fetch(`/api/v1/geospatial/mpa?bbox=${bbox}`).then(r=>r.ok?r.json():Promise.reject()).then(setMumbaiMpa).catch(()=>{})
+    fetch(`/api/v1/geospatial/coastline?bbox=${bbox}`).then(r=>r.ok?r.json():Promise.reject()).then(d=> {
       if(d.features && d.features.length>0) setMumbaiCoast(d)
-      else setMumbaiCoast(null) // OSM basemap already shows accurate coastline
-    }).catch(()=>{})
-    // fallback india coastline only if needed for non-Mumbai views
-    fetch('/india_coastline.geojson').then(r=>r.json()).then(d=> { if(!mumbaiCoast) setCoast(d)}).catch(()=>{})
+      else setMumbaiCoast(null)
+    }).catch(()=> setMumbaiCoast(null))
   }, [])
 
   const pfzIcon = (sel:boolean) => L.divIcon({ className:'', html:`<div style="width:${sel?14:12}px;height:${sel?14:12}px;background:${sel?'#f59e0b':'#0ea5e9'};border-radius:50%;border:2px solid white;box-shadow:0 0 4px #000"></div>`, iconSize:[12,12] as any, iconAnchor:[6,6] as any })
@@ -64,9 +60,8 @@ export default function LeafletMap() {
       {layers.eez && eez && /* @ts-ignore */ <RLGeoJSON data={eez} style={{ color:'#0ea5e9', weight:2, dashArray:'8 8', fillColor:'#0ea5e9', fillOpacity:0.12 } as any} onEachFeature={(f:any,l:any)=> l.bindPopup(`<b>${f.properties?.name || 'EEZ'}</b><br/>${f.properties?.note || 'Mumbai clipped — offshore only'}`) } />}
       {/* MPA - Thane Creek visible when zoomed to Mumbai */}
       {layers.mpa && mumbaiMpa && /* @ts-ignore */ <RLGeoJSON data={mumbaiMpa} style={(f:any)=> f.properties?.name?.includes('Thane') ? { color:'#f43f5e', weight:2, dashArray:'4 4', fillColor:'#f43f5e', fillOpacity:0.18 } as any : { color:'#ef4444', weight:1.5, fillColor:'#ef4444', fillOpacity:0.10 } as any} onEachFeature={(f:any,l:any)=> l.bindPopup(`<b>${f.properties?.name}</b><br/>${f.properties?.authority || ''}<br/><span style=color:#f43f5e>${f.properties?.restriction || ''}</span>`) } />}
-      {/* Accurate Mumbai coastline - follows actual water edge from Alibag to Dahanu, not inland */}
-      {mumbaiCoast && /* @ts-ignore */ <RLGeoJSON data={mumbaiCoast} style={{ color:'#38bdf8', weight:3, opacity:0.95, lineCap:'round' } as any} onEachFeature={(f:any,l:any)=> l.bindPopup(`<b>${f.properties?.name}</b><br/><small>${f.properties?.note || ''}</small>`) } />}
-      {!mumbaiCoast && layers.pfz && coast && /* @ts-ignore */ <RLGeoJSON data={coast} style={{ color:'#38bdf8', weight:2, opacity:0.6 } as any} />}
+      {/* Accurate Mumbai coastline - Natural Earth 10m from PostGIS, no dummy */}
+      {mumbaiCoast && /* @ts-ignore */ <RLGeoJSON data={mumbaiCoast} style={{ color:'#38bdf8', weight:3, opacity:0.95, lineCap:'round' } as any} onEachFeature={(f:any,l:any)=> l.bindPopup(`<b>${f.properties?.name}</b><br/><small>Authentic Natural Earth 10m</small>`) } />}
       {/* PFZ - improved: zone halo (5km) + marker colored by suitability + distance - NO span (MapContainer only allows Layers) */}
       {layers.pfz && pfz.map((p:any)=>{
         const s = getPfzStyle(p)
@@ -86,8 +81,6 @@ export default function LeafletMap() {
             </Marker>
         ]
       }).flat()}
-      {/* Mumbai pilot highlight - subtle, does not obscure coastline */}
-      {/* @ts-ignore */ <Rectangle bounds={[[18.5,72.2],[19.5,73.2]] as any} pathOptions={{ color:'#22d3ee', weight:1.5, dashArray:'6 6', fillOpacity:0.03 } as any}><Popup>Mumbai BBOX 72.2,18.5 - 73.2,19.5<br/><small>All 39 datasets clipped here</small></Popup></Rectangle>}
       <FlyTo center={center} />
     </MapContainer>
   )
