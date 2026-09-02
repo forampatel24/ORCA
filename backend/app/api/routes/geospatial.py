@@ -28,14 +28,15 @@ async def get_coastline(bbox: str = Query(default="72.2,18.5,73.2,19.5", descrip
     conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
     cur = conn.cursor()
     # Return geofences coastline as GeoJSON - from DB, not hardcoded array
+    # Use parameterized ILIKE to avoid psycopg %c placeholder error
     cur.execute("""
         SELECT json_build_object(
             'type','FeatureCollection',
             'features', COALESCE(json_agg(ST_AsGeoJSON(geometry)::jsonb || jsonb_build_object('properties', jsonb_build_object('name', name, 'geofence_type', geofence_type))), '[]'::json)
         )::text
         FROM geofences
-        WHERE name ILIKE '%coastline%' AND ST_Intersects(geometry, ST_MakeEnvelope(%s,%s,%s,%s,4326))
-    """, (min_lon, min_lat, max_lon, max_lat))
+        WHERE name ILIKE %s AND ST_Intersects(geometry, ST_MakeEnvelope(%s,%s,%s,%s,4326))
+    """, ('%coastline%', min_lon, min_lat, max_lon, max_lat))
     row = cur.fetchone()
     conn.close()
     if row and row[0]:
