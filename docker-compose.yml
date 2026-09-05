@@ -3,7 +3,7 @@
     image: redis:7-alpine
     container_name: orca-redis
     ports:
-      - "7379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -19,8 +19,8 @@
     image: qdrant/qdrant:v1.13.5
     container_name: orca-qdrant
     ports:
-      - "7333:6333"
-      - "7334:6334"
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:

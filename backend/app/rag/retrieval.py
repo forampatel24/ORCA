@@ -5,7 +5,13 @@ def retrieve(query: str, top_k: int = 5, top_n: int = 3, filters: Dict = None) -
     """Hybrid: Qdrant semantic top_k -> rerank to top_n -> citation. Mumbai-only filter when region=mumbai."""
     from qdrant_client import QdrantClient, models
     from fastembed import TextEmbedding
-    client = QdrantClient(url="http://localhost:6333", check_compatibility=False)
+    import os
+    try:
+        from app.config.settings import settings as _s
+        _qurl = _s.qdrant_url
+    except Exception:
+        _qurl = os.getenv("QDRANT_URL", "http://localhost:6333")
+    client = QdrantClient(url=_qurl, check_compatibility=False)
     model = TextEmbedding("BAAI/bge-small-en-v1.5")
     qvec = list(model.embed([query]))[0]
     # Mumbai-only Qdrant filter - pass filters={"region":"mumbai"} to scope to Mumbai advisories

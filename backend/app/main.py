@@ -1,8 +1,28 @@
 """ORCA FastAPI entrypoint - docs 03_ARCHITECTURE API Layer."""
 import os
-# M7 thorough fix: rasterio PROJ mismatch (PostGIS proj.db MINOR 2 vs rasterio needs >=6) - force venv's PROJ
-os.environ["PROJ_LIB"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\pyproj\proj_dir\share\proj"
-os.environ["GDAL_DATA"] = r"D:\Foram_TP\ORCA\backend\.venv\Lib\site-packages\rasterio\gdal_data"
+from pathlib import Path
+# M7 fix: PROJ/GDAL mismatch — auto-detect venv's PROJ data portable (no D: hardcode)
+# Friend clone on any drive/OS: use relative venv if exists, else leave env untouched
+try:
+    import sys
+    _venv_proj = Path(sys.prefix) / "Lib" / "site-packages" / "pyproj" / "proj_dir" / "share" / "proj"
+    # also try import location (works for .venv, venv, global)
+    import pyproj as _pyproj
+    _import_proj = Path(_pyproj.__file__).parent / "proj_dir" / "share" / "proj"
+    for _cand in [_venv_proj, _import_proj]:
+        if _cand.exists() and _cand.is_dir():
+            os.environ.setdefault("PROJ_LIB", str(_cand))
+            os.environ.setdefault("PROJ_DATA", str(_cand))
+            break
+except Exception:
+    pass
+try:
+    import rasterio as _rio  # type: ignore
+    _rio_gdal = Path(_rio.__file__).parent / "gdal_data"
+    if _rio_gdal.exists():
+        os.environ.setdefault("GDAL_DATA", str(_rio_gdal))
+except Exception:
+    pass
 import structlog
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware

@@ -1,8 +1,19 @@
-import psycopg, json, asyncio
+import psycopg, json, asyncio, os
 from pathlib import Path
+from urllib.parse import urlparse
+def _conn_str():
+    url = os.getenv("DATABASE_URL_ADMIN") or os.getenv("DATABASE_URL") or ""
+    if url.startswith("postgresql"):
+        url = url.replace("postgresql+psycopg://", "postgresql://")
+        p = urlparse(url)
+        return f"host={p.hostname or 'localhost'} port={p.port or 5432} dbname={(p.path or '/orca_db').lstrip('/')} user={p.username or 'postgres'} password={p.password or 'postgres'}"
+    return os.getenv("DATABASE_URL_PSYCOPG", "host=localhost dbname=orca_db user=postgres password=postgres")
+
+# Portable root for frontend checks — no D: hardcode
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 print("=== M1 PostGIS ===")
-c=psycopg.connect('host=localhost dbname=orca_db user=postgres password=postgres')
+c=psycopg.connect(_conn_str())
 cur=c.cursor()
 for tbl in ['maritime_boundaries','protected_areas','geofences','pfz_observations','weather_observations','knowledge_documents','knowledge_chunks']:
     cur.execute(f'SELECT count(*) FROM {tbl}')
@@ -73,7 +84,7 @@ hits=retrieve('MPA buffer 5km', top_k=5, top_n=2)
 print('rag MPA', [(h['citation'], round(h['score'],3)) for h in hits])
 
 print("\n=== Frontend ===")
-print('frontend exists', Path('D:/Foram_TP/ORCA/frontend/src/App.tsx').exists(), 'size', Path('D:/Foram_TP/ORCA/frontend/src/App.tsx').stat().st_size)
-print('frontend vite', Path('D:/Foram_TP/ORCA/frontend/vite.config.ts').exists())
+print('frontend exists', (PROJECT_ROOT / 'frontend/src/App.tsx').exists(), 'size', (PROJECT_ROOT / 'frontend/src/App.tsx').stat().st_size if (PROJECT_ROOT / 'frontend/src/App.tsx').exists() else 0)
+print('frontend vite', (PROJECT_ROOT / 'frontend/vite.config.ts').exists())
 
 print("\nALL CHECKS DONE")

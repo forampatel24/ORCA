@@ -64,8 +64,12 @@ async def analyze_intent_node(state: OrcaState) -> OrcaState:
     """Extracts the intent from the user query. Falls back to mock if no LLM key."""
     llm = get_llm()
     query = state["user_query"]
+    # Portable debug log — no C:/ hardcode; uses project logs/ if writable else silent
     try:
-        with open("C:/temp/orca_intent.log", "a", encoding="utf-8") as _f:
+        import pathlib as _pl
+        _log_path = _pl.Path(__file__).resolve().parents[3] / "logs" / "orca_intent.log"
+        _log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_log_path, "a", encoding="utf-8") as _f:
             _f.write(f"QUERY repr={repr(query)} lower={repr(query.lower())} contains सुरक्षित={('सुरक्षित' in query.lower())}\n")
     except: pass
     if llm is None:
@@ -182,13 +186,18 @@ async def planner_node(state: OrcaState) -> OrcaState:
 async def execute_agents_node(state: OrcaState) -> OrcaState:
     """M5: Execute 8 specialized agents via tools (docs 06_AGENT_SPEC)."""
     results = state.get("agent_results", {}) or {}
-    # Data-driven location mapping — loads from data/location_coords.json (not hard-coded in code)
+    # Data-driven location mapping — loads from data/location_coords.json portable
     import json, pathlib
     loc_str = (state.get("location") or "Mumbai").lower().strip()
-    coords_path = pathlib.Path(__file__).parents[3] / "data" / "location_coords.json"
-    # also try ORCA root
-    if not coords_path.exists():
-        coords_path = pathlib.Path("D:/Foram_TP/ORCA/data/location_coords.json")
+    # Portable: repo root is parents[3] from backend/app/agents/orchestrator/
+    coords_path = pathlib.Path(__file__).resolve().parents[3] / "data" / "location_coords.json"
+    # Env override for custom location file
+    import os
+    _env_coords = os.getenv("ORCA_LOCATION_COORDS")
+    if _env_coords:
+        _env_p = pathlib.Path(_env_coords)
+        if _env_p.exists():
+            coords_path = _env_p
     try:
         coords_raw = json.loads(coords_path.read_text(encoding="utf-8"))
         coords = {k.lower(): tuple(v) for k, v in coords_raw.items()}

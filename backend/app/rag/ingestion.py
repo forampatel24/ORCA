@@ -1,10 +1,35 @@
 """RAG Ingestion - docs 10_RAG MinIO->PyMuPDF->chunk->FastEmbed->Qdrant + PG metadata."""
-import os, uuid, json
+import os, uuid, json, re
 from pathlib import Path
 from typing import List
 import psycopg
+from urllib.parse import urlparse
 from minio import Minio
 from app.rag.chunking import chunk_text, clean_text
+
+# Portable project root: ORCA/ (3 levels up from backend/app/rag/)
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+def _psycopg_conn_str() -> str:
+    """Convert settings.database_url (sqlalchemy) to psycopg conninfo; portable via .env."""
+    try:
+        from app.config.settings import settings as _s
+        url = (_s.database_url or "").strip()
+        # sqlalchemy url: postgresql+psycopg://user:pass@host:port/db
+        if url.startswith("postgresql"):
+            # strip driver
+            url = url.replace("postgresql+psycopg://", "postgresql://")
+            parsed = urlparse(url)
+            user = parsed.username or "postgres"
+            pwd = parsed.password or "postgres"
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 5432
+            db = parsed.path.lstrip("/") or "orca_db"
+            return f"host={host} port={port} dbname={db} user={user} password={pwd}"
+    except Exception:
+        pass
+    # env fallback
+    return os.getenv("DATABASE_URL_PSYCOPG", "host=localhost dbname=orca_db user=postgres password=postgres")
 
 def extract_text(filepath: Path) -> str:
     if filepath.suffix.lower() == ".pdf":
@@ -23,16 +48,37 @@ def extract_text(filepath: Path) -> str:
     else:
         return filepath.read_text(encoding="utf-8", errors="ignore")
 
-def ingest_knowledge(data_dir: str = "D:/Foram_TP/ORCA/data/knowledge"):
-    """Full pipeline: MinIO raw -> extract -> chunk -> embed -> Qdrant + PG."""
+def ingest_knowledge(data_dir: str = None):
+    """Full pipeline: MinIO raw -> extract -> chunk -> embed -> Qdrant + PG. Portable — no D: hardcode."""
     from fastembed import TextEmbedding
     from qdrant_client import QdrantClient
     from qdrant_client.models import PointStruct
 
-    minio_client = Minio("localhost:9100", access_key="minioadmin", secret_key="minioadmin", secure=False)
-    qdrant = QdrantClient(url="http://localhost:6333", check_compatibility=False)
+    # Resolve data_dir portable: default ORCA/data/knowledge (works on any clone)
+    if data_dir is None:
+        data_dir = str(PROJECT_ROOT / "data" / "knowledge")
+    # Allow env override
+    data_dir = os.getenv("ORCA_KNOWLEDGE_DIR", data_dir)
+
+    # Use settings for endpoints — portable via .env
+    try:
+        from app.config.settings import settings as _s
+        minio_endpoint = _s.minio_endpoint
+        qdrant_url = _s.qdrant_url
+        minio_access = _s.minio_access_key
+        minio_secret = _s.minio_secret_key
+        minio_secure = _s.minio_secure
+    except Exception:
+        minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9100")
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+        minio_access = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+        minio_secret = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+        minio_secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
+
+    minio_client = Minio(minio_endpoint, access_key=minio_access, secret_key=minio_secret, secure=minio_secure)
+    qdrant = QdrantClient(url=qdrant_url, check_compatibility=False)
     model = TextEmbedding("BAAI/bge-small-en-v1.5")
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(_psycopg_conn_str())
     cur = conn.cursor()
 
     # Clear previous for idempotent re-ingest (keep collection)

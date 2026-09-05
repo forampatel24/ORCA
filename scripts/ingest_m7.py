@@ -1,8 +1,23 @@
 """M7 Static GIS ingest - EEZ/MPA/coastline/bathymetry/CMFRI per docs 08."""
-import json, csv, psycopg
+import json, csv, psycopg, os, pathlib
 import uuid
+from urllib.parse import urlparse
 
-conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+# Portable project root — works on any clone (no D: hardcode)
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+# Allow env override for custom data locations
+DATA_EXTERNAL = pathlib.Path(os.getenv("ORCA_DATA_EXTERNAL", str(PROJECT_ROOT / "data" / "external")))
+DATA_PROCESSED = pathlib.Path(os.getenv("ORCA_DATA_PROCESSED", str(PROJECT_ROOT / "data" / "processed")))
+
+def _conn_str():
+    url = os.getenv("DATABASE_URL_ADMIN") or os.getenv("DATABASE_URL") or ""
+    if url.startswith("postgresql"):
+        url = url.replace("postgresql+psycopg://", "postgresql://")
+        p = urlparse(url)
+        return f"host={p.hostname or 'localhost'} port={p.port or 5432} dbname={(p.path or '/orca_db').lstrip('/')} user={p.username or 'postgres'} password={p.password or 'postgres'}"
+    return os.getenv("DATABASE_URL_PSYCOPG", "host=localhost dbname=orca_db user=postgres password=postgres")
+
+conn = psycopg.connect(_conn_str())
 cur = conn.cursor()
 cur.execute("CREATE TABLE IF NOT EXISTS cmfri_landings (id UUID PRIMARY KEY, year INT, state VARCHAR, species VARCHAR, landings_tonnes INT, gear VARCHAR)")
 cur.execute("DELETE FROM maritime_boundaries WHERE name='India EEZ'")
@@ -12,7 +27,7 @@ cur.execute("DELETE FROM cmfri_landings WHERE state IN ('Maharashtra','Gujarat')
 conn.commit()
 
 # 1. EEZ -> maritime_boundaries
-with open("D:/Foram_TP/ORCA/data/external/eez_india.geojson") as f:
+with open(DATA_EXTERNAL / "eez_india.geojson") as f:
     gj = json.load(f)
     for feat in gj["features"]:
         geom = json.dumps(feat["geometry"])
@@ -22,7 +37,7 @@ conn.commit()
 print("EEZ inserted")
 
 # 2. MPA -> protected_areas
-with open("D:/Foram_TP/ORCA/data/external/mpa_india.geojson") as f:
+with open(DATA_EXTERNAL / "mpa_india.geojson") as f:
     gj = json.load(f)
     for feat in gj["features"]:
         geom = json.dumps(feat["geometry"])
@@ -32,7 +47,7 @@ conn.commit()
 print("MPA inserted 2")
 
 # 3. Coastline -> geofences as operational (for demo)
-with open("D:/Foram_TP/ORCA/data/external/coastline_india.geojson") as f:
+with open(DATA_EXTERNAL / "coastline_india.geojson") as f:
     gj = json.load(f)
     for feat in gj["features"]:
         geom = json.dumps(feat["geometry"])
@@ -43,11 +58,15 @@ conn.commit()
 # 4. Bathymetry mock - create raster via PostGIS raster? For M7 we store metadata in MinIO
 from minio import Minio
 import io
-minio_client = Minio("localhost:9100", access_key="minioadmin", secret_key="minioadmin", secure=False)
+# MinIO endpoint from env portable
+_minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9100")
+_minio_access = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+_minio_secret = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+_minio_secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
+minio_client = Minio(_minio_endpoint, access_key=_minio_access, secret_key=_minio_secret, secure=_minio_secure)
 # mock GeoTIFF 10x10 with depth -20 to -100
 # Bathymetry mock - PROJ 8.2 vs 9 mismatch thorough fix: use dummy 80 bytes for M7 demo, real GEBCO would need pyproj>=3.7
-import os
-tmp = "D:/Foram_TP/ORCA/data/processed/bathymetry_sample.tif"
+tmp = str(DATA_PROCESSED / "bathymetry_sample.tif")
 os.makedirs(os.path.dirname(tmp), exist_ok=True)
 # keep existing dummy if exists, else create
 if not os.path.exists(tmp) or os.path.getsize(tmp) < 100:
@@ -60,7 +79,7 @@ print("bathymetry raster -> MinIO orca-raster/bathymetry/gebco_subset_sample.tif
 
 # 5. CMFRI -> create table if not exists and insert
 cur.execute("CREATE TABLE IF NOT EXISTS cmfri_landings (id UUID PRIMARY KEY, year INT, state VARCHAR, species VARCHAR, landings_tonnes INT, gear VARCHAR)")
-with open("D:/Foram_TP/ORCA/data/external/cmfri_landings.csv") as f:
+with open(DATA_EXTERNAL / "cmfri_landings.csv") as f:
     reader = csv.DictReader(f)
     for row in reader:
         cur.execute("INSERT INTO cmfri_landings (id, year, state, species, landings_tonnes, gear) VALUES (%s,%s,%s,%s,%s,%s)",

@@ -5,13 +5,27 @@ Replaces ingest_m7.py global rectangles with Mumbai-clipped authentic sources.
 """
 import json, csv, psycopg, os, pathlib
 import uuid
+from urllib.parse import urlparse
+
+# Portable project root — no D: hardcode
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+DATA_EXTERNAL = pathlib.Path(os.getenv("ORCA_DATA_EXTERNAL", str(PROJECT_ROOT / "data" / "external")))
+DATA_PROCESSED = pathlib.Path(os.getenv("ORCA_DATA_PROCESSED", str(PROJECT_ROOT / "data" / "processed")))
+
+def _conn_str():
+    url = os.getenv("DATABASE_URL_ADMIN") or os.getenv("DATABASE_URL") or ""
+    if url.startswith("postgresql"):
+        url = url.replace("postgresql+psycopg://", "postgresql://")
+        p = urlparse(url)
+        return f"host={p.hostname or 'localhost'} port={p.port or 5432} dbname={(p.path or '/orca_db').lstrip('/')} user={p.username or 'postgres'} password={p.password or 'postgres'}"
+    return os.getenv("DATABASE_URL_PSYCOPG", "host=localhost dbname=orca_db user=postgres password=postgres")
 
 # Mumbai bbox - same as app.config.mumbai
 MUMBAI_BBOX = [72.2, 18.5, 73.2, 19.5]
 EXT_BBOX = [71.8, 15.5, 74.5, 20.5]
 print(f"Mumbai BBOX {MUMBAI_BBOX} Extended {EXT_BBOX} - Mumbai-only, no global")
 
-conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+conn = psycopg.connect(_conn_str())
 cur = conn.cursor()
 # Clear previous Mumbai demo data for re-ingest (keep other states if any)
 cur.execute("DELETE FROM maritime_boundaries WHERE name LIKE '%Mumbai%' OR name='India EEZ'")
@@ -21,7 +35,7 @@ conn.commit()
 
 # 1. EEZ -> Mumbai-clipped India EEZ (from data/external/eez_india.geojson subset to bbox)
 # Authentic: in production call https://marineregions.org/api/getGazetteer...?bbox=... - here clip local geojson to Mumbai bbox
-eez_path = pathlib.Path("D:/Foram_TP/ORCA/data/external/eez_india.geojson")
+eez_path = DATA_EXTERNAL / "eez_india.geojson"
 if eez_path.exists():
     import shapely.geometry, shapely.ops
     gj = json.loads(eez_path.read_text())
@@ -37,7 +51,7 @@ if eez_path.exists():
     print("EEZ Mumbai-clipped inserted")
 
 # 2. MPA -> Mumbai-relevant (Malvan) only, Gulf filtered out as not Mumbai
-mpa_path = pathlib.Path("D:/Foram_TP/ORCA/data/external/mpa_india.geojson")
+mpa_path = DATA_EXTERNAL / "mpa_india.geojson"
 if mpa_path.exists():
     import shapely.geometry
     gj = json.loads(mpa_path.read_text())
@@ -55,7 +69,7 @@ if mpa_path.exists():
     print("MPA Mumbai-relevant inserted")
 
 # 3. Coastline -> clip to Mumbai bbox and buffer 5km (operational geofence)
-coast_path = pathlib.Path("D:/Foram_TP/ORCA/data/external/coastline_india.geojson")
+coast_path = DATA_EXTERNAL / "coastline_india.geojson"
 if coast_path.exists():
     gj = json.loads(coast_path.read_text())
     for feat in gj["features"]:
@@ -70,10 +84,14 @@ if coast_path.exists():
 # Per architecture: GEBCO provides user-defined area - take Mumbai region only
 from minio import Minio
 import io
-minio_client = Minio("localhost:9100", access_key="minioadmin", secret_key="minioadmin", secure=False)
+_minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9100")
+_minio_access = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+_minio_secret = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+_minio_secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
+minio_client = Minio(_minio_endpoint, access_key=_minio_access, secret_key=_minio_secret, secure=_minio_secure)
 # Try create real subset via rio clip if GEBCO file exists globally - else use Mumbai dummy marked as subset
-tmp = pathlib.Path("D:/Foram_TP/ORCA/data/processed/bathymetry_sample.tif")
-mumbai_tif = pathlib.Path("D:/Foram_TP/ORCA/data/processed/bathymetry_mumbai_subset.tif")
+tmp = DATA_PROCESSED / "bathymetry_sample.tif"
+mumbai_tif = DATA_PROCESSED / "bathymetry_mumbai_subset.tif"
 # Create Mumbai subset marker - authentic subset would be via GEBCO WCS: ?bbox=72.2,18.5,73.2,19.5
 # Here we ensure MinIO object is Mumbai subset, not global
 if tmp.exists():
@@ -89,7 +107,7 @@ else:
 # 5. CMFRI -> Maharashtra/Mumbai only (filter, not global)
 cur.execute("CREATE TABLE IF NOT EXISTS cmfri_landings (id UUID PRIMARY KEY, year INT, state VARCHAR, species VARCHAR, landings_tonnes INT, gear VARCHAR)")
 cur.execute("DELETE FROM cmfri_landings WHERE state IN ('Maharashtra','Gujarat')")
-csv_path = pathlib.Path("D:/Foram_TP/ORCA/data/external/cmfri_landings.csv")
+csv_path = DATA_EXTERNAL / "cmfri_landings.csv"
 with open(csv_path) as f:
     reader = csv.DictReader(f)
     for row in reader:

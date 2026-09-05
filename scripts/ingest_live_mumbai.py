@@ -1,12 +1,22 @@
 """Live Mumbai ingest - replaces dummy with Open-Meteo live for demo. No Kafka."""
-import asyncio, sys, json, uuid
-sys.path.insert(0, "D:/Foram_TP/ORCA/backend")
+import asyncio, sys, json, uuid, os, pathlib
+# Portable backend path — no D: hardcode
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 import psycopg
 from app.services.ingestion.connectors.weather_connector import WeatherConnector
 from app.services.ingestion.connectors.ocean_connector import OceanConnector
 
 async def main():
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    from urllib.parse import urlparse
+    def _conn_str():
+        url = os.getenv("DATABASE_URL_ADMIN") or os.getenv("DATABASE_URL") or ""
+        if url.startswith("postgresql"):
+            url = url.replace("postgresql+psycopg://", "postgresql://")
+            p = urlparse(url)
+            return f"host={p.hostname or 'localhost'} port={p.port or 5432} dbname={(p.path or '/orca_db').lstrip('/')} user={p.username or 'postgres'} password={p.password or 'postgres'}"
+        return os.getenv("DATABASE_URL_PSYCOPG", "host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(_conn_str())
     cur = conn.cursor()
     # get source ids
     cur.execute("SELECT id FROM data_sources WHERE name='IMD Weather' LIMIT 1")

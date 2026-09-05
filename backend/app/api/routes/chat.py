@@ -99,13 +99,15 @@ async def chat(req: ChatRequest, request: Request, current_user = Depends(get_cu
     resp_text = _re.sub(r"\*\*", "", resp_text)
     resp_text = _re.sub(r"###", "", resp_text)
     save_message(conv_id, str(current_user.id), "assistant", resp_text, lang)
-    # derive map center from orchestrator location via data/location_coords.json
-    import json, pathlib
+    # derive map center from orchestrator location via data/location_coords.json portable
+    import json, pathlib, os
     loc = (final_state.get("location") or "").lower()
     center = None
     if loc:
         try:
-            p = pathlib.Path("D:/Foram_TP/ORCA/data/location_coords.json")
+            # Portable: repo root = 4 levels up from backend/app/api/routes/
+            _root = pathlib.Path(__file__).resolve().parents[4]
+            p = pathlib.Path(os.getenv("ORCA_LOCATION_COORDS", str(_root / "data" / "location_coords.json")))
             coords = json.loads(p.read_text(encoding="utf-8"))
             for k, v in coords.items():
                 if k.lower() in loc or loc in k.lower():

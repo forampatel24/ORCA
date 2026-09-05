@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="http://localhost:6333")
     qdrant_api_key: str = Field(default="")
 
-    # MinIO
-    minio_endpoint: str = Field(default="localhost:9000")
+    # MinIO - default matches docker-compose 9100:9000 (host:9100)
+    minio_endpoint: str = Field(default="localhost:9100")
     minio_access_key: str = Field(default="minioadmin")
     minio_secret_key: str = Field(default="minioadmin")
     minio_secure: bool = Field(default=False)
