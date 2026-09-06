@@ -1,11 +1,34 @@
-﻿## Milestone 13 — Mumbai Live 15 Aug → 06 Sep (Legit, No Synthetic)
+﻿## Milestone 15 — Visualization Sidebar + Copernicus Gridded (Honest Station, Mausam-aligned)
+
+Date: 2026-09-06
+
+### Added
+- 3-panel Marine Intelligence Workspace `Chat 380px + Leaflet OSM Map + Viz Sidebar 320px slide-out` — 4 categories `Fishing Intelligence / Marine Conditions / Safety & Alerts / Navigation` → 18 subs (`pfz/sst/chl/fish`, `wind/waves/currents/weather/sea`, `cyclone/lightning/mpa/restricted/alerts`, `vessel/ports/eez/route/geofence`), `frontend/src/components/viz/VisualizationSidebar.tsx 162 lines` + `frontend/src/stores/vizStore.ts` + `frontend/src/App.tsx` legend + info card, `frontend/src/components/map/LeafletMap.tsx` rewritten — Maharashtra `fillOpacity 0` + coastline `#0284c7 weight 2` Mausam-aligned (Natural Earth 10m 557 pts)
+- Honest single real station marker `19.076,72.877` for `SST/Chl/Wind/Waves/Weather/Sea` — one buoy `GET /ocean/history 23` + `GET /weather 23` (Open-Meteo Archive/Marine 15 Aug–06 Sep) with popup "per-pixel heatmap needs gridded NetCDF — this marker is the honest single-point value", no random, no waves on land (all layers water-only offshore)
+- Copernicus real gridded ingestion `scripts/ingest_copernicus_grid.py` — `data/raw_copernicus/*.nc` `13×12 0.083°` physics `thetao/so/uo/vo/zos` + `chl 5×4` → 102 water-only rows `metadata.source=copernicus_grid_phy_20260620` (land NaN 36% masked), `ocean_observations` 23 → 125, `backend/app/api/routes/ocean.py` new `GET /ocean/grid?bbox=72.2,18.5,73.2,19.5` returns 87 pts `{lat,lon,thetao,so,uo,vo,current_speed,zos,chlorophyll}` per-pixel real, Leaflet grid overlay for `SST/currents` (color by `thetao`, arrow by `uo/vo`)
+- `README.md` Current Status `M13–M15 @ 9181902` + Quick Start with real-data restore (`docker compose`, `ingest_mumbai_authentic.py`, `ingest_copernicus_grid.py` 102 rows, `GET /ocean/grid 87 pts`, hard-refresh), `STATUS.md` updated `M15` + 102 grid + 781 modules
+
+### Fixed
+- Removed `Math.random() * 0.8` offshore scatter — deterministic honest markers, `OFFSHORE_GRID[24]` replaced by single station + true Copernicus grid; waves/SST never on land (Mumbai city polygon avoided)
+- Coastline shift perception — Maharashtra fill transparent so OSM beige land / blue water shows, coastline dark `#0284c7` crisp on water edge, verified `ST_AsGeoJSON [[72.87,20.5],...]` correct 557 pts `72.649–73.872`
+- `.env` secrets not in git — friend `git pull` must run ingest scripts; `data/raw_copernicus/*.nc` now tracked (102 rows reproducible)
+
+### Tests
+- `ocean_observations 125 (23 single-point + 102 grid)`, `weather 23`, `pfz 46`, `maritime 5`, `geofences 1`, `DB 38 MB`, `Qdrant 6`, `GET /ocean/grid 200 87 pts` with `Bearer test@orca.local` verified, `POST /ocean/history` station marker popup, `vite build 781 modules 1,473kB` `tsc` OK
+
+### Notes
+- No synthetic — land pixels are natively NaN masked, chlorophyll flat `0.139` is Open-Meteo no-chl fallback until Copernicus `OCEANCOLOUR GLO BGC` daily grid replaces `2026-06-20` single date with 23-day series via `copernicusmarine` (`fpatel1/ForamPatel@31`)
+
+---
+
+## Milestone 13 — Mumbai Live 15 Aug → 06 Sep (Legit, No Synthetic)
 
 Date: 2026-09-06
 
 ### Added
 - Docker PostGIS 16-3.4 alpine container orca-postgres 5432 (replaces native D:\PostreSQL / C:\Program Files), init_m1.sql fixed 3 geometry columns POLYGON/MULTIPOLYGON/MULTILINESTRING → GEOMETRY(GEOMETRY,4326) for Natural Earth/MarineRegions, grants extended ALTER DEFAULT PRIVILEGES for orca_app
 - Weather 23 days 2026-08-15→09-06 Open-Meteo Archive legit (archive-api.open-meteo.com) noon daily temp/wind/pressure, Ocean 23 days SST/wave Open-Meteo Marine 552 hourly → 23 noon, Maritime 5 MarineRegions WFS Mumbai bbox 72.2,18.5,73.2,19.5, Geofences 1 Natural Earth 10m clipped, CMFRI 8 Maharashtra, Knowledge 4 docs 6 chunks Qdrant 6, DB 38 MB 0.37% 10GB MinIO 3230 bytes
-- PFZ 0 legit (INCOIS daily window closed, no synthetic 3 zones), chlorophyll null (Open-Meteo no chl), Protected 0 legit (no MPA Mumbai), Copernicus fpatel1 dry-run 2026-06-20 43KB Mumbai bbox, GFW 782 chars 200 OK
+- PFZ 0 legit (INCOIS daily window closed, no synthetic 3 zones), chlorophyll null (Open-Meteo Marine no chl), Protected 0 legit (no MPA Mumbai), Copernicus fpatel1 dry-run 2026-06-20 43KB Mumbai bbox, GFW 782 chars 200 OK
 - Charts.tsx SstChart/ChlorophyllChart rewired to GET /weather?limit=30 sorted 15 Aug→06 Sep legit, email-validator 2.3 installed, bcrypt 4.0.1, frontend build 779 modules 11.21s
 - Test scripts .tmp_test\backfill_15aug.py 23 days, check_size, pfz_legit, no big inline commands
 

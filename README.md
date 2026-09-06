@@ -923,57 +923,72 @@ No automatic Git commit or push is performed.
 
 # Current Status
 
-> **M0-M12 Completed — 2026-08-30 (M12 Testing 21 tests Prometheus + M9 MapLibre 7 + ECharts 5173 proxy 2.1MB + M8 RAG 4 docs 6 chunks Qdrant 6 + M7 GIS Verified)**
+> **M13–M15 + Visualization Sidebar merged — 2026-09-06 (main @ 9181902)**
 
-Working (all on `D:` `docker_data.vhdx 2.17GB`, not `C:`):
-- `docker compose up -d` `orca-*` 30h healthy `9100/6333/6379` + `PostgreSQL 18.4 :5432 PostGIS 3.6.2` + `uvicorn :8000` `GET / 200`
-- `M12 Testing 21 tests Prometheus + M9 MapLibre 7 + ECharts 5173 proxy 2.1MB + M8 RAG 4 docs 6 chunks Qdrant 6 + M7 GIS` `maritime 1 EEZ + protected 2 MPA + geofences 2 + cmfri 8` `ST_Contains true` `ST_DWithin 10km true` `MinIO raster/bathymetry`
-- `M5/M6` `POST /chat MODERATE 45` `risk VERY_HIGH` `pfz 0.776` `sst +1.5` `route cost 0.359`
+Working (Docker PostGIS 16-3.4 alpine `orca-postgres:5432` healthy + `orca-redis`/`orca-minio:9100`/`orca-qdrant:6333` on `orca-network`, all volumes on `D:`):
 
-Next: `M5 Specialized Agents + Tools` (Marine/Weather/Ocean/Geo/Risk/Route/RAG specialized agents)
+- **Data (38 MB / 10 GB 0.37%):** `ocean_observations 125` (23 Open-Meteo Marine single-point `19.076,72.877` 15 Aug–06 Sep `sst 29.1–29.7` `wave 1.4–1.5m` + **102 Copernicus gridded** `thetao/so/uo/vo/zos/chl` `13×12 0.083°` water-masked `2026-06-20`), `weather_observations 23` `temp 26–28°C wind 15–18 km/h`, `pfz_observations 46`, `maritime_boundaries 5` MarineRegions WFS `72.2,18.5,73.2,19.5`, `geofences 1` Natural Earth 10m coastline `557 pts`, `protected_areas 0` (legit STALE), `marine_hazards 0`
+- **APIs (10 routers):** `POST /chat` (Orchestrator `analyze→plan→execute→synthesize`), `GET /pfz/nearest`, `GET /weather/`, `GET /hazards/`, `POST /risk/assess`, `POST /routes/calculate`, `GET /geospatial/{eez,mpa,coastline,pfz}`, `GET /ocean/{history,grid}` (new `/grid` serves 87 gridded Copernicus points, 102 inserted), `GET /health` `200`
+- **Frontend (781 modules 1,473kB):** 3-panel `Chat (380px) + Map (Leaflet OSM) + Viz Sidebar (320px slide-out)` — 4 categories `Fishing/Marine/Safety/Navigation` → 18 subs, single real station marker (honest `19.076,72.877` buoy, no random, no waves on land) + optional 87-pt Copernicus grid overlay (SST/currents, water-only), legend + info card, `SstChart/ChlorophyllChart` 23-day `GET /ocean/history`
+- **RAG/Qdrant:** `orca_knowledge green 6 points 384d Cosine` (4 docs 6 chunks)
 
-See:
+Next: Ingest `2026-08-15→09-06` daily Copernicus NRT grid (23× `GLOBAL_ANALYSISFORECAST_PHY_001_024` + `BIO_001_029` `chl`) to replace `2026-06-20` single-date grid with full 23-day spatial heatmap.
 
-* `STATUS.md` for current implementation state.
-* `CHANGELOG.md` for milestone history.
-* `AGENTS.md` for development rules.
-* `/docs` for detailed architecture specifications.
+See `STATUS.md` / `CHANGELOG.md` / `AGENTS.md` / `/docs` (20 specs).
 
 ---
 
 # Quick Start
 
-Verified on Windows 11 + Docker Desktop (data on `D:\Docker\DockerDesktopWSL`):
+Verified on Windows 11 + Docker Desktop (all Docker data on `D:\Docker\DockerDesktopWSL\disk\docker_data.vhdx`, project on `D:\ORCA`):
 
 ```bash
 # 1. Clone
-git clone <repo> && cd ORCA
+git clone git@github.com:forampatel24/ORCA.git && cd ORCA
 
-# 2. Configure (creates backend/.env too)
+# 2. Configure — .env is NOT in git (secrets)
 cp .env.example .env
-cp .env.example backend/.env
-# set OPENAI_API_KEY in backend/.env for Orchestrator (M4)
+# fill .env: DATABASE_URL, REDIS_URL, QDRANT_URL, MINIO_ENDPOINT=localhost:9100,
+# LLM_API_KEY / LLM_PROVIDER, JWT_SECRET,
+# COPERNICUSMARINE_SERVICE_USERNAME=fpatel1 COPERNICUSMARINE_SERVICE_PASSWORD=***,
+# GFW_API_TOKEN=***, MUMBAI_BBOX=72.2,18.5,73.2,19.5
+# (backend reads same .env; no separate backend/.env needed)
 
-# 3. Start infrastructure (all data stays on D:)
+# 3. Start infrastructure (4 healthy)
 docker compose up -d
-docker ps  # orca-redis, orca-qdrant, orca-minio healthy
+docker ps  # orca-postgres healthy 5432, orca-redis 6379, orca-minio 9100/9101, orca-qdrant 6333
 
-# 4. Verify storage (native PostgreSQL D:\PostreSQL)
-$env:PGPASSWORD="postgres"
-& "D:\PostreSQL\bin\psql.exe" -U postgres -h localhost -p 5432 -d orca_db -c "SELECT PostGIS_Version(); SELECT count(*) FROM pfz_observations;"
-python -c "from minio import Minio; print(Minio('localhost:9100', 'minioadmin','minioadmin', secure=False).list_buckets())"
-curl http://localhost:6333/healthz
+# 4. Verify DB (Docker PostGIS — no native D:\PostreSQL needed anymore)
+docker exec orca-postgres psql -U postgres -d orca_db -c "SELECT PostGIS_Version(); SELECT count(*) FROM ocean_observations; SELECT pg_size_pretty(pg_database_size('orca_db'));"
+# expect: 3.6 USE_GEOS=1, count 23 before grid / 125 after grid, 38 MB
 docker exec orca-redis redis-cli ping  # PONG
+curl http://localhost:6333/healthz  # ok
+curl http://localhost:9100/minio/health/live  # 200
 
-# 5. Start Backend API (M3 & M4)
+# 5. Restore real data (friend `git pull` needs this — DB is NOT in git)
+# 5a. Mumbai legit 23-day + GIS (Open-Meteo Archive/Marine, MarineRegions, Natural Earth)
+python scripts/ingest_mumbai_authentic.py
+# 5b. Copernicus real gridded per-pixel (102 water points, NO random, land NaN masked)
+#     uses data/raw_copernicus/*.nc (already in git: mumbai_phy/uo/vo/zos/chl_20260620.nc)
+D:\ORCA\backend\.venv\Scripts\python.exe scripts/ingest_copernicus_grid.py
+#     verifies: Inserted 102 copernicus gridded rows, total ocean_observations 125
+# 5c. (optional) Fetch 23-day NRT grid 15 Aug–06 Sep via Copernicus Marine Toolbox:
+#     python scripts/fetch_copernicus_mumbai_23days.py  # needs fpatel1 creds in .env
+
+# 6. Backend API (10 routers, hot-reload)
 cd backend
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --port 8000
-# Verify connection to all databases:
-# curl http://127.0.0.1:8000/api/v1/health/services
+# http://localhost:8000/docs  •  curl http://localhost:8000/api/v1/health
+# login: POST /api/v1/auth/login username=test@orca.local password=test123
+# grid:  curl -H "Authorization: Bearer <token>" "http://localhost:8000/api/v1/ocean/grid?bbox=72.2,18.5,73.2,19.5" # count 87
 
-# 6. Frontend (M9 will add full map)
-cd frontend && npm install && npm run dev  # http://localhost:5173
+# 7. Frontend (Vite 5.2 + React 18 + Leaflet + ECharts)
+cd ../frontend
+npm install
+npm run dev  # http://localhost:5173 (or 5174 if 5173 busy) • hard-refresh Ctrl+Shift+R after git pull
+# Map: 4-category sidebar → sub → single real buoy (19.076,72.877) + 87-pt Copernicus grid (water-only)
+# Charts: SST/Chl 23-day GET /ocean/history
 ```
 
 ---
@@ -1072,8 +1087,8 @@ License information will be added before public release.
 
 **Architecture:** Defined (20 docs frozen)
 **Documentation:** Defined
-**Implementation:** M0-M6 Completed (Foundation + Storage + Pipeline + API + Orchestrator + 8 Agents + Intelligence Engines on D:)
-**Prototype:** Not yet reached (M7-M12 pending)
+**Implementation:** M0-M15 + Visualization Sidebar merged (main @ 9181902) — 4-category viz, honest station, 102-pt Copernicus grid, /ocean/grid, 125 ocean rows
+**Prototype:** Mumbai Live 15 Aug–06 Sep checkpoint reached
 **Production:** Not yet reached
 
 ---
@@ -1085,41 +1100,5 @@ License information will be added before public release.
 An intelligent marine decision-support platform built around
 Agentic AI, geospatial intelligence, Earth Observation data,
 and evidence-based reasoning.
-# Quick Start (Mumbai Live) - updated 2026-09-06
-
-## Prerequisites
-- Docker Desktop on D: (volumes on docker_data.vhdx), Python 3.14, Node 18+
-- .env filled: LLM_API_KEY (Gemini AQ.A), COPERNICUS fpatel1, GFW 782 chars
-
-## 1. Docker (4 services)
-\\\
-docker compose up -d
-docker ps  # orca-postgres healthy, orca-redis healthy, orca-minio, orca-qdrant
-\\\
-
-## 2. DB
-Uses Docker PostGIS 16-3.4 alpine on 5432 (no native D:\PostreSQL). Init already on volume orca_postgres_data. Verify:
-\\\
-python .tmp_test/check_after_backfill.py  # DB 38 MB 0.37% 10GB
-\\\
-
-## 3. Backend
-\\\
-cd backend
-.venv\Scripts\activate
-pip install "bcrypt==4.0.1"  # for passlib
-pip install email-validator  # if missing
-uvicorn app.main:app --reload --port 8000
-# http://localhost:8000/docs
-\\\
-
-## 4. Frontend
-\\\
-cd frontend
-npm run dev  # http://localhost:5173
-\\\
-
-## Mumbai data 15 Aug -> today
-Weather 23 days + Ocean 23 days legit Open-Meteo Archive/Marine, Maritime 5, Geofences 1. Charts show 15 Aug - 06 Sep trend. PFZ 0 legit (INCOIS window), chlorophyll null till Copernicus/MOSDAC.
 
 
