@@ -13,7 +13,7 @@ __pycache__/
 .mypy_cache/
 dist/
 build/
-
+.tmp_test
 # Node
 node_modules/
 dist/
