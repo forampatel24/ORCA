@@ -3,7 +3,7 @@
 .venv/
 venv/
 *.pem
-
+.opencode
 # Python
 __pycache__/
 *.py[cod]
