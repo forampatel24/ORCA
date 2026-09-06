@@ -1,4 +1,4 @@
--- M1 Polyglot Storage Init - docs 05_DATABASE_DESIGN + 20_DATABSE_ARCHITECTURE
+﻿-- M1 Polyglot Storage Init - docs 05_DATABASE_DESIGN + 20_DATABSE_ARCHITECTURE
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS postgis;
 
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS geofences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     geofence_type VARCHAR(50),
-    geometry GEOMETRY(POLYGON, 4326),
+    geometry GEOMETRY(GEOMETRY, 4326),
     severity VARCHAR(20),
     description TEXT,
     active BOOLEAN DEFAULT true,
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS protected_areas (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255),
     area_type VARCHAR(100),
-    geometry GEOMETRY(MULTIPOLYGON, 4326),
+    geometry GEOMETRY(GEOMETRY, 4326),
     authority VARCHAR(255),
     restrictions TEXT,
     description TEXT,
@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS maritime_boundaries (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255),
     boundary_type VARCHAR(100),
-    geometry GEOMETRY(MULTILINESTRING, 4326),
+    geometry GEOMETRY(GEOMETRY, 4326),
     country VARCHAR(100),
     description TEXT,
     metadata JSONB
@@ -264,3 +264,4 @@ INSERT INTO data_sources (name, provider, source_type, category, format, status)
 ('WDPA Marine Protected Areas', 'Protected Planet', 'protected_area', 'geospatial', 'Shapefile', 'AVAILABLE'),
 ('Marine Regions EEZ', 'Marine Regions', 'eez', 'geospatial', 'Shapefile', 'AVAILABLE')
 ON CONFLICT DO NOTHING;
+

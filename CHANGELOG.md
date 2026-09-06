@@ -1,3 +1,26 @@
+﻿## Milestone 13 — Mumbai Live 15 Aug → 06 Sep (Legit, No Synthetic)
+
+Date: 2026-09-06
+
+### Added
+- Docker PostGIS 16-3.4 alpine container orca-postgres 5432 (replaces native D:\PostreSQL / C:\Program Files), init_m1.sql fixed 3 geometry columns POLYGON/MULTIPOLYGON/MULTILINESTRING → GEOMETRY(GEOMETRY,4326) for Natural Earth/MarineRegions, grants extended ALTER DEFAULT PRIVILEGES for orca_app
+- Weather 23 days 2026-08-15→09-06 Open-Meteo Archive legit (archive-api.open-meteo.com) noon daily temp/wind/pressure, Ocean 23 days SST/wave Open-Meteo Marine 552 hourly → 23 noon, Maritime 5 MarineRegions WFS Mumbai bbox 72.2,18.5,73.2,19.5, Geofences 1 Natural Earth 10m clipped, CMFRI 8 Maharashtra, Knowledge 4 docs 6 chunks Qdrant 6, DB 38 MB 0.37% 10GB MinIO 3230 bytes
+- PFZ 0 legit (INCOIS daily window closed, no synthetic 3 zones), chlorophyll null (Open-Meteo no chl), Protected 0 legit (no MPA Mumbai), Copernicus fpatel1 dry-run 2026-06-20 43KB Mumbai bbox, GFW 782 chars 200 OK
+- Charts.tsx SstChart/ChlorophyllChart rewired to GET /weather?limit=30 sorted 15 Aug→06 Sep legit, email-validator 2.3 installed, bcrypt 4.0.1, frontend build 779 modules 11.21s
+- Test scripts .tmp_test\backfill_15aug.py 23 days, check_size, pfz_legit, no big inline commands
+
+### Fixed
+- init_m1.sql geometry types for future clones, create_orca_app.py grants DELETE + ALTER DEFAULT, .env duplicate MUMBAI_BBOX 8→4, backend health/metrics still has orca, login test@orca.local 200
+
+### Tests
+- weather 23 08-15 verified, ocean 23, maritime 5 geofences 1, DB 38 MB OK under 10GB, GFW 200 30 vessels, Copernicus dry-run 43KB
+
+### Notes
+- No synthetic — PFZ 0/chlorophyll null are STALE per 09_DATA_PIPELINE, wiring without hardcode via app/config/mumbai.py
+
+
+---
+
 # ORCA Changelog
 
 ## Milestone 00 — Foundation & Dev Environment
@@ -142,7 +165,7 @@ Date: 2026-08-30
 
 ---
 
-## Milestone 06 � Intelligence Engines
+## Milestone 06 � Intelligence Engines
 
 Date: 2026-08-30
 
@@ -233,3 +256,4 @@ Date: 2026-08-30
 
 ### Notes
 - Follows 17_TESTING 11 passed unit + 17_TESTING integration/e2e + 18_MONITORING Prometheus structlog
+

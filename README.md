@@ -1085,3 +1085,41 @@ License information will be added before public release.
 An intelligent marine decision-support platform built around
 Agentic AI, geospatial intelligence, Earth Observation data,
 and evidence-based reasoning.
+# Quick Start (Mumbai Live) - updated 2026-09-06
+
+## Prerequisites
+- Docker Desktop on D: (volumes on docker_data.vhdx), Python 3.14, Node 18+
+- .env filled: LLM_API_KEY (Gemini AQ.A), COPERNICUS fpatel1, GFW 782 chars
+
+## 1. Docker (4 services)
+\\\
+docker compose up -d
+docker ps  # orca-postgres healthy, orca-redis healthy, orca-minio, orca-qdrant
+\\\
+
+## 2. DB
+Uses Docker PostGIS 16-3.4 alpine on 5432 (no native D:\PostreSQL). Init already on volume orca_postgres_data. Verify:
+\\\
+python .tmp_test/check_after_backfill.py  # DB 38 MB 0.37% 10GB
+\\\
+
+## 3. Backend
+\\\
+cd backend
+.venv\Scripts\activate
+pip install "bcrypt==4.0.1"  # for passlib
+pip install email-validator  # if missing
+uvicorn app.main:app --reload --port 8000
+# http://localhost:8000/docs
+\\\
+
+## 4. Frontend
+\\\
+cd frontend
+npm run dev  # http://localhost:5173
+\\\
+
+## Mumbai data 15 Aug -> today
+Weather 23 days + Ocean 23 days legit Open-Meteo Archive/Marine, Maritime 5, Geofences 1. Charts show 15 Aug - 06 Sep trend. PFZ 0 legit (INCOIS window), chlorophyll null till Copernicus/MOSDAC.
+
+
