@@ -18,12 +18,12 @@ let _lastWeatherAt = 0
 
 function VesselDraggable() {
   const { userPos, setUserPos } = useMapStore()
-  if (!userPos) return null
+  const pos = userPos || ([72.877, 19.076] as any)
   return (
     // @ts-ignore
-    <Marker position={[userPos[1], userPos[0]] as any} draggable icon={L.divIcon({ className: "", html: `<div style="width:18px;height:18px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 8px #000;display:flex;align-items:center;justify-content:center"><span style="font-size:10px">🚢</span></div>`, iconSize: [18, 18] as any, iconAnchor: [9, 9] as any }) as any}
+    <Marker position={[pos[1], pos[0]] as any} draggable icon={L.divIcon({ className: "", html: `<div style="width:22px;height:22px;background:#0ea5e9;border:2px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px #000;display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:11px;line-height:1">📍</span></div><div style="position:absolute;top:22px;left:50%;transform:translateX(-50%);background:#0ea5e9;color:white;font-size:9px;font-weight:700;padding:1px 5px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px #000">YOU</div>`, iconSize: [22, 22] as any, iconAnchor: [11, 22] as any }) as any}
       eventHandlers={{ dragend: (e: any) => { const ll = e.target.getLatLng(); setUserPos([ll.lng, ll.lat]) } }}>
-      <Popup><div style={{ color: "#0f172a", fontSize: 11 }}>Entered vessel position<br/>{userPos[1].toFixed(3)}, {userPos[0].toFixed(3)}<br/><small>Drag to move</small></div></Popup>
+      <Popup><div style={{ color: "#0f172a", fontSize: 11 }}>Your reference position<br/>{pos[1].toFixed(3)}, {pos[0].toFixed(3)} • Mumbai default<br/><small>Drag to move — distances & geofence update live</small></div></Popup>
     </Marker>
   )
 }

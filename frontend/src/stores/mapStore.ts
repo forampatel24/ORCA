@@ -19,10 +19,10 @@ export const useMapStore = create<MapState>((set) => ({
   pfz: [],
   selectedPfz: null,
   layers: { pfz: true, mpa: true, eez: true },
-  userPos: null,
+  userPos: [72.877, 19.076] as any,
   setCenter: (c) => set({ center: c }),
   setPfz: (p) => set({ pfz: p }),
   setSelected: (p) => set({ selectedPfz: p }),
   toggleLayer: (k) => set((s) => ({ layers: { ...s.layers, [k]: !s.layers[k] } })),
-  setUserPos: (p) => set({ userPos: p, center: p ? [p[0], p[1]] : [72.8, 19.0] } as any),
+  setUserPos: (p) => set({ userPos: p || ([72.877, 19.076] as any), center: p ? [p[0], p[1]] : [72.8, 19.0] } as any),
 }))
