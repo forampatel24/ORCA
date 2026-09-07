@@ -262,17 +262,19 @@ async def execute_agents_node(state: OrcaState) -> OrcaState:
     return {"agent_results": results}
 
 async def synthesize_node(state: OrcaState) -> OrcaState:
-    """Generates final response. Mock fallback if no LLM."""
+    """Generates final response. No mock synthesis - honest structured evidence when LLM unavailable."""
     llm = get_llm()
     results = state.get("agent_results", {})
     if llm is None:
-        intent = state.get("intent", "")
-        if "risk" in str(results).lower() or intent == "check_safety":
-            risk = results.get("risk_agent", {})
-            level = risk.get("risk_level", "UNKNOWN") if isinstance(risk, dict) else "UNKNOWN"
-            wind = risk.get("wind_speed", risk.get("inputs", {}).get("wind_speed", "?")) if isinstance(risk, dict) else "?"
-            return {"final_response": f"[M5/M6 Synthesis] Safety {level} risk (score {risk.get('risk_score','?')}). Wind {wind} m/s. PFZ {len(results.get('marine_agent',{}).get('pfz',[]))} zones. Evidence: {json.dumps(results, indent=2)[:700]}"}
-        return {"final_response": f"[M3/M4 Mock Synthesis] Query '{state['user_query']}' answered with evidence: {json.dumps(results)[:1000]}"}
+        # No LLM key configured - do not fabricate natural language. Return deterministic
+        # evidence summary with explicit provenance so the UI can show honest state.
+        return {"final_response": (
+            "ORCA evidence summary (LLM not configured - live data only, no mock synthesis):\n"
+            f"Query: {state['user_query']}\n"
+            f"Agents executed: {', '.join(results.keys()) if results else 'none'}\n"
+            f"Evidence:\n{json.dumps(results, indent=2)[:1800]}\n"
+            "Set LLM_API_KEY in backend/.env to enable natural-language synthesis."
+        )}
     results_str = json.dumps(results, indent=2)
     prompt = (
         f"You are ORCA, an Agentic Marine Intelligence Platform.\n"

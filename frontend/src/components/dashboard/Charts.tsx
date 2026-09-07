@@ -15,13 +15,15 @@ export function SstChart() {
         const items = res.data.items || []
         const labels = items.map((r:any) => r.observation_time ? new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '')
         const temps = items.map((r:any) => r.sst ?? null)
-        setDates(labels.length ? labels : ['01 Sep','07 Sep'])
-        setSst(temps.length ? temps : [28.1,29.9])
+        if (labels.length && temps.some((v:any) => v != null)) { setDates(labels); setSst(temps) }
+        else { setDates([]); setSst([]) }
       } catch {
-        const res = await api.get('/weather/', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers: token ? { Authorization: 'Bearer ' + token } : {} })
-        const items = [...(res.data.items||[])].sort((a:any,b:any) => new Date(a.observation_time).getTime() - new Date(b.observation_time).getTime())
-        setDates(items.map((r:any) => new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})))
-        setSst(items.map((r:any) => r.temperature))
+        try {
+          const res = await api.get('/weather/', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers: token ? { Authorization: 'Bearer ' + token } : {} })
+          const items = [...(res.data.items||[])].sort((a:any,b:any) => new Date(a.observation_time).getTime() - new Date(b.observation_time).getTime())
+          if (items.length) { setDates(items.map((r:any) => new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}))); setSst(items.map((r:any) => r.temperature)) }
+          else { setDates([]); setSst([]) }
+        } catch { setDates([]); setSst([]) }
       } finally { setLoading(false) }
     }
     fetchData()

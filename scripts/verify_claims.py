@@ -1,0 +1,16 @@
+import psycopg
+c=psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+cur=c.cursor()
+cur.execute("SELECT metadata->>'landing_centre', metadata->>'depth_mtr', metadata->>'sst' FROM pfz_observations ORDER BY latitude")
+rows=cur.fetchall()
+for r in rows:
+    print(r)
+print("---")
+cur.execute("SELECT count(*) FROM protected_areas")
+print("mpa count",cur.fetchone()[0])
+cur.execute("SELECT ST_AsText(geometry) FROM protected_areas LIMIT 2")
+print(cur.fetchall())
+cur.execute("SELECT sst, observation_time::text FROM ocean_observations ORDER BY observation_time DESC LIMIT 3")
+print("ocean",cur.fetchall())
+cur.execute("SELECT wind_speed, observation_time::text FROM weather_observations ORDER BY observation_time DESC LIMIT 3")
+print("weather",cur.fetchall())

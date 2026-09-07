@@ -51,8 +51,10 @@ def resolve_references(query: str, history: list, last_location: Optional[str] =
     pronouns = ["there", "that zone", "that pfz", "that location", "this zone", "तिथे", "त्या ठिकाणी"]
     if any(p in ql for p in pronouns) and last_location:
         resolved += f" (referring to {last_location})"
-    # time resolution
-    time_map = {"tomorrow": "2026-08-31", "today": "2026-08-30", "6 am": "06:00"}
+    # time resolution - live, no hardcoded 2026-08-30 demo dates
+    from datetime import datetime, timezone, timedelta
+    today = datetime.now(timezone.utc).date()
+    time_map = {"tomorrow": (today + timedelta(days=1)).isoformat(), "today": today.isoformat(), "6 am": "06:00"}
     time_resolved = None
     for k,v in time_map.items():
         if k in ql:

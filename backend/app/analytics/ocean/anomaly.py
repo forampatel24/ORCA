@@ -3,11 +3,12 @@ from typing import Dict, Any
 import structlog
 log = structlog.get_logger()
 
-def _mumbai_baseline(variable: str, fallback: float) -> float:
-    """Authentic 30-day Mumbai bbox average from ocean_observations, not hardcoded."""
+def _mumbai_baseline(variable: str) -> float | None:
+    """Authentic 30-day Mumbai bbox average from ocean_observations, no hardcoded fallback."""
     from app.config.mumbai import MUMBAI_BBOX
     try:
         from app.database.connection import psycopg_conninfo
+        import psycopg
         conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         col = "sst" if variable == "sst" else "chlorophyll"
@@ -23,17 +24,21 @@ def _mumbai_baseline(variable: str, fallback: float) -> float:
             return float(v)
     except Exception as e:
         log.warning("anomaly_baseline_db_failed", error=str(e))
-    return fallback
+    return None
 
 def sst_anomaly(observed: float, baseline: float = None) -> Dict[str, Any]:
     if observed is None: return {"observed": None, "baseline": None, "anomaly": None, "unit": "C", "flag": "MISSING", "source": "no_authentic_mumbai_sst"}
-    b = baseline if baseline is not None else _mumbai_baseline("sst", 27.0)
+    b = baseline if baseline is not None else _mumbai_baseline("sst")
+    if b is None:
+        return {"observed": observed, "baseline": None, "anomaly": None, "unit": "C", "flag": "UNKNOWN_BASELINE", "source": "mumbai_bbox_30d_avg_no_history"}
     anomaly = observed - b
     flag = "ANOMALOUS" if abs(anomaly) > 1.5 else "VALID"
     return {"observed": observed, "baseline": round(b,2), "anomaly": round(anomaly,2), "unit": "C", "flag": flag, "source": "mumbai_bbox_30d_avg"}
 
 def chlorophyll_anomaly(observed: float, baseline: float = None) -> Dict[str, Any]:
     if observed is None: return {"observed": None, "baseline": None, "anomaly": None, "unit": "mg/m3", "flag": "MISSING"}
-    b = baseline if baseline is not None else _mumbai_baseline("chlorophyll", 0.6)
+    b = baseline if baseline is not None else _mumbai_baseline("chlorophyll")
+    if b is None:
+        return {"observed": observed, "baseline": None, "anomaly": None, "unit": "mg/m3", "flag": "UNKNOWN_BASELINE", "source": "mumbai_bbox_30d_avg_no_history"}
     anomaly = observed - b
     return {"observed": observed, "baseline": round(b,3), "anomaly": round(anomaly,3), "unit": "mg/m3", "flag": "VALID" if abs(anomaly) < 1.0 else "ANOMALOUS", "source": "mumbai_bbox_30d_avg"}

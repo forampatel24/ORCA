@@ -28,16 +28,22 @@ function VesselDraggable() {
 function FlyTo({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
-    const lon = center[0],
-      lat = center[1]
-    const zoom = lon >= 72 && lon <= 73.5 && lat >= 18 && lat <= 20 ? 9 : 5
-    map.flyTo([lat, lon], zoom, { duration: 1 } as any)
+    const lon = center[0], lat = center[1]
+    // Preserve the zoom the user has set - never force zoom out to 5
+    // when they drag outside Mumbai. Only nudge zoom if wildly off.
+    const cur = map.getZoom()
+    const target = cur >= 7 && cur <= 13 ? cur : 9
+    // Don't animate if already close (user panned with purpose)
+    const curCenter = map.getCenter()
+    const dLat = Math.abs(curCenter.lat - lat), dLon = Math.abs(curCenter.lng - lon)
+    if (dLat < 0.02 && dLon < 0.02) return
+    map.flyTo([lat, lon], target, { duration: 0.9 } as any)
   }, [center])
   return null
 }
 
 export default function LeafletMap() {
-  const { center, pfz, layers } = useMapStore()
+  const { center, pfz, layers, userPos } = useMapStore()
   const { activeSub } = useVizStore()
   const [states, setStates] = useState<any>(null)
   const [eez, setEez] = useState<any>(null)
@@ -142,7 +148,29 @@ export default function LeafletMap() {
       // Live GFW v3 fishing events - public endpoint, no login needed
       fetch(`/api/v1/vessels?bbox=71.8,15.5,74.5,20.5&limit=50`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setVessels(d.items || [])).catch(() => setVessels([]))
     }
-    if (activeSub === "route") setRouteLine([[19.076, 72.877], [19.03, 72.8], [18.98, 72.75]])
+    if (activeSub === "route") {
+      // Real safe route: vessel -> nearest PFZ, or vessel -> EEZ safety, whichever alert is active
+      const vp = useMapStore.getState().userPos
+      if (vp) {
+        // Prefer the alert's safe_route (EEZ boundary) when it exists, else nearest PFZ
+        const sr = (window as any).__orca_safe_route
+        if (sr?.coordinates) {
+          setRouteLine(sr.coordinates.map((c: any) => [c[1], c[0]]))
+        } else {
+          fetch(`/api/v1/geospatial/notify?latitude=${vp[1]}&longitude=${vp[0]}`).then((r) => (r.ok ? r.json() : null)).then((j) => {
+            const pfz = j?.pfz_nearest
+            if (pfz) setRouteLine([[vp[1], vp[0]], [pfz.latitude, pfz.longitude]])
+            else setRouteLine([])
+          }).catch(() => setRouteLine([]))
+        }
+      } else {
+        // No vessel set - show an example safe corridor inside EEZ (not a mock PFZ)
+        fetch(`/api/v1/geospatial/notify?latitude=19.076&longitude=72.877`).then((r) => (r.ok ? r.json() : null)).then((j) => {
+          const pfz = j?.pfz_nearest
+          if (pfz) setRouteLine([[19.076, 72.877], [pfz.latitude, pfz.longitude]])
+        }).catch(() => {})
+      }
+    }
   }, [activeSub])
 
   const pfzIcon = (sel: boolean) =>
@@ -284,14 +312,8 @@ export default function LeafletMap() {
           <Marker key={v.id} position={[v.latitude, v.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:16px;height:16px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 6px #000;position:relative"><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:600">${(v.vessel_name || "VESSEL").slice(0, 18)}</div></div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b>{v.vessel_name || "Unknown vessel"}</b><br/><small>{v.event_type || "fishing"} • {v.observation_time?.slice(0, 10)}</small><br/><small>{v.latitude?.toFixed(3)}°N, {v.longitude?.toFixed(3)}°E</small><br/><small>Source: GFW v3 events</small></div></Popup></Marker>
         ))}
         {activeSub === "vessel" && vessels.length === 0 && <EmptyOverlay title="Vessels — no GFW events in window" body="vessel_tracks 0 rows for this bbox. Re-run GFW backfill." />}
-        {activeSub === "route" && routeLine.length > 1 && ( // @ts-ignore
-          <Polyline positions={routeLine as any} pathOptions={{ color: "#22c55e", weight: 4, dashArray: "8 8", opacity: 0.9 } as any} />
-        )}
-        {activeSub === "route" && routeLine.map((p, i) => ( // @ts-ignore
-          <Marker key={"route-pt" + i} position={p as any} icon={L.divIcon({ className: "", html: `<div style="width:10px;height:10px;background:${i === 0 ? "#22c55e" : i === routeLine.length - 1 ? "#f59e0b" : "white"};border:2px solid #0f172a;border-radius:50%"></div>`, iconSize: [10, 10] as any, iconAnchor: [5, 5] as any }) as any} />
-        ))}
         {activeSub === "geofence" && ( // @ts-ignore
-          <Marker position={[19.0, 72.5] as any} icon={L.divIcon({ className: "", html: `<div style="width:120px;height:120px;border:1.5px dashed #f59e0b;border-radius:50%;background:rgba(245,158,11,0.08);display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:10px;font-weight:600">2.4 km buffer</div>`, iconSize: [120, 120] as any, iconAnchor: [60, 60] as any }) as any} />
+          <Marker position={userPos ? [userPos[1], userPos[0]] as any : [19.0, 72.5] as any} icon={L.divIcon({ className: "", html: `<div style="width:120px;height:120px;border:1.5px dashed #f59e0b;border-radius:50%;background:rgba(245,158,11,0.08);display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:10px;font-weight:600">5.4 km buffer</div>`, iconSize: [120, 120] as any, iconAnchor: [60, 60] as any }) as any} />
         )}
         <FlyTo center={center} />
       </MapContainer>

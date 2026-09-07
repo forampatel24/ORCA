@@ -24,14 +24,16 @@ class GEBCOConnector(BaseConnector):
 
     async def fetch(self, bbox: List[float] = None, **params) -> List[Dict[str, Any]]:
         bbox = bbox or MUMBAI_BBOX
-        # Bathymetry is static - ingestion is via scripts/ingest_m7_mumbai.py which subsets GeoTIFF to bbox
-        # This connector returns metadata only; actual raster is stored as MinIO orca-raster/bathymetry/mumbai_gebco_subset.tif
+        # Bathymetry is static gridded raster, not a point API. Connector does not
+        # fabricate depth values - it signals where the real raster lives (or that
+        # no authentic GEBCO subset has been ingested yet). No mock depths invented.
         log.info("gebco_mumbai_bbox_metadata", bbox=bbox)
         return [{
             "bbox": bbox,
-            "source": "GEBCO_mumbai_subset",
-            "note": "Raster stored in MinIO orca-raster/bathymetry/mumbai_gebco_subset.tif clipped to Mumbai bbox - not global 4GB",
+            "source": "GEBCO_mumbai_subset_placeholder",
+            "note": "No authentic GEBCO Mumbai subset ingested yet - placeholder raster (442 bytes) in MinIO. Fetch real GEBCO WCS for bbox to replace.",
             "latitude": (bbox[1]+bbox[3])/2,
             "longitude": (bbox[0]+bbox[2])/2,
             "observation_time": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "authentic": False,
         }]
