@@ -53,6 +53,57 @@ async def chlorophyll_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
     return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
             "source": "copernicus_bgc-pft_anfc daily chl 0.25deg Mumbai"}
 
+
+@router.get("/currents-grid")
+async def currents_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
+    # Public read. Fresh NRT currents vectors (phy hourly uo/vo, 0.083deg,
+    # latest hour) for the currents streamlines layer. No mocks.
+    from app.services.copernicus_store import currents_cells
+    try:
+        bb = tuple(map(float, bbox.split(",")))
+    except Exception:
+        bb = (71.8, 15.5, 74.5, 20.5)
+    cells, tdate = currents_cells(bb)
+    return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
+            "source": "copernicus_phy_anfc hourly uo/vo 0.083deg Mumbai"}
+
+
+@router.get("/waves-grid")
+async def waves_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
+    # Public read. Fresh NRT wave field (WAM VHM0/VTM02/VMDR, 0.083deg 3-hourly,
+    # latest slot) for the waves layer. Every cell a real value, land masked.
+    from app.services.copernicus_store import waves_cells
+    try:
+        bb = tuple(map(float, bbox.split(",")))
+    except Exception:
+        bb = (71.8, 15.5, 74.5, 20.5)
+    cells, tdate = waves_cells(bb)
+    return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
+            "source": "copernicus_wav_anfc VHM0/VTM02/VMDR 0.083deg Mumbai"}
+
+
+@router.get("/wind-grid")
+async def wind_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
+    # Public read. Spatial wind field - live per-cell Open-Meteo forecast
+    # (current wind_speed_10m + direction), no single-point copy.
+    from app.services.wind_store import wind_cells
+    try:
+        bb = tuple(map(float, bbox.split(",")))
+    except Exception:
+        bb = (71.8, 15.5, 74.5, 20.5)
+    cells, tdate = await wind_cells(bb)
+    return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
+            "source": "open-meteo forecast wind_speed_10m/wind_direction_10m per-cell Mumbai"}
+
+
+@router.get("/tides")
+async def tides_live(hours: int = Query(default=48, le=120)):
+    """Mumbai tides - harmonic prediction (Admiralty constituents), no mock series."""
+    from app.services.tide_store import tides_window, tide_extremes
+    return {"extremes": tide_extremes(hours=hours), "series": tides_window(hours=hours),
+            "datum": "Chart datum (Mumbai Apollo Bunder), MSL 2.10 m",
+            "source": "harmonic constituents (Admiralty NP 83, 10 constituents)"}
+
 @router.get("/grid")
 async def ocean_grid(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
     """Real Copernicus gridded per-pixel values — thetao/sst, so, uo, vo, current_speed, chlorophyll. Water only (land NaN masked)."""

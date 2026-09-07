@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS marine_hazards (
     source_id UUID REFERENCES data_sources(id),
     hazard_type VARCHAR(50) NOT NULL,
     severity VARCHAR(20),
+    title VARCHAR(255),
     valid_from TIMESTAMPTZ,
     valid_to TIMESTAMPTZ,
     geometry GEOMETRY(GEOMETRY, 4326),

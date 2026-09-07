@@ -42,6 +42,14 @@ export default function LeafletMap() {
   const [sstTime, setSstTime] = useState<string>("")
   const [chlCells, setChlCells] = useState<any[]>([]) // fresh NRT chl grid 0.25deg
   const [chlTime, setChlTime] = useState<string>("")
+  const [curCells, setCurCells] = useState<any[]>([]) // fresh NRT currents uo/vo 0.083deg
+  const [curTime, setCurTime] = useState<string>("")
+  const [waveCells, setWaveCells] = useState<any[]>([]) // fresh NRT wave field 0.083deg
+  const [waveTime, setWaveTime] = useState<string>("")
+  const [windCells, setWindCells] = useState<any[]>([]) // live per-cell wind forecast
+  const [windTime, setWindTime] = useState<string>("")
+  const [lightning, setLightning] = useState<any>(null) // lightning strikes + CAPE
+  const [tides, setTides] = useState<any>(null) // harmonic tide extremes
 
   useEffect(() => {
     fetch("/india_states.geojson")
@@ -94,6 +102,22 @@ export default function LeafletMap() {
     if (["cyclone", "lightning", "alerts"].includes(activeSub)) {
       api.get("/hazards/", { params: { latitude: lat, longitude: lon, radius: 100 }, headers }).then((r) => setHazards(r.data.items || [])).catch(() => setHazards([]))
     }
+    if (activeSub === "currents") {
+      fetch(`/api/v1/ocean/currents-grid?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { setCurCells(d.cells || []); setCurTime(d.time || "") }).catch(() => { setCurCells([]); setCurTime("") })
+    }
+    if (activeSub === "waves") {
+      fetch(`/api/v1/ocean/waves-grid?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { setWaveCells(d.cells || []); setWaveTime(d.time || "") }).catch(() => { setWaveCells([]); setWaveTime("") })
+    }
+    if (activeSub === "wind") {
+      fetch(`/api/v1/ocean/wind-grid?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { setWindCells(d.cells || []); setWindTime(d.time || "") }).catch(() => { setWindCells([]); setWindTime("") })
+    }
+    if (activeSub === "lightning") {
+      fetch(`/api/v1/hazards/lightning?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setLightning).catch(() => setLightning(null))
+    }
+    if (activeSub === "sea") {
+      fetch(`/api/v1/ocean/tides?hours=48`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setTides).catch(() => setTides(null))
+      fetch(`/api/v1/hazards/lightning?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setLightning).catch(() => {})
+    }
     if (activeSub === "vessel") {
       // Live GFW v3 fishing events - public endpoint, no login needed
       fetch(`/api/v1/vessels?bbox=71.8,15.5,74.5,20.5&limit=50`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setVessels(d.items || [])).catch(() => setVessels([]))
@@ -118,6 +142,10 @@ export default function LeafletMap() {
   const latestOcean = oceanHistory[oceanHistory.length - 1] || oceanHistory[0]
   const latestWeather = weather[weather.length - 1] || weather[0]
   const STA_LAT = 19.076, STA_LON = 72.877
+  const waveColor = (h: number) => h < 1.0 ? "#22c55e" : h < 1.8 ? "#84cc16" : h < 2.5 ? "#eab308" : h < 3.2 ? "#f97316" : "#ef4444"
+  const windColor = (s: number) => s < 8 ? "#94a3b8" : s < 15 ? "#38bdf8" : s < 22 ? "#fbbf24" : s < 30 ? "#f97316" : "#ef4444"
+  const tideLabel = (e: any) => `${e.type === "high" ? "▲ High" : "▼ Low"} ${new Date(e.time).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" })} ${new Date(e.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} • ${e.height_m}m`
+  const tideList = tides?.extremes?.slice(0, 6) || []
 
   const sstColor = (v: number) => v < 27.5 ? "#1d4ed8" : v < 28.2 ? "#0284c7" : v < 28.8 ? "#06b6d4" : v < 29.4 ? "#eab308" : v < 30 ? "#f97316" : "#ef4444"
   const chlColor = (v: number) => v < 0.15 ? "#1e3a8a" : v < 0.25 ? "#0284c7" : v < 0.4 ? "#10b981" : v < 0.7 ? "#22c55e" : "#4d7c0f"
@@ -160,18 +188,21 @@ export default function LeafletMap() {
           <Marker key={"chl-pfz" + p.id} position={[p.latitude, p.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:9px;height:9px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 4px #000"></div>`, iconSize: [9, 9] as any, iconAnchor: [4, 4] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b style={{ color: "#22c55e" }}>{p.landing_centre || p.metadata?.landing_centre || "PFZ"}</b><br/><small>SST {p.sst ?? p.metadata?.sst ?? "-"}°C • Chl {p.chlorophyll ?? p.metadata?.chlorophyll ?? "-"} mg/m³</small><br/><small>{p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</small></div></Popup></Marker>
         ))}
         {activeSub === "chl" && chlCells.length === 0 && <EmptyOverlay title="Chlorophyll grid — unavailable" body="Fresh NRT subset missing. Re-run cm_download." />}
-        {activeSub === "wind" && latestWeather && (
-          // @ts-ignore
-          <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:white;border:1.5px solid #334155;border-radius:8px;padding:4px 6px;color:#0f172a;font-size:11px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.4);transform:rotate(${latestWeather.wind_direction ?? 250}deg)">➤</div><div style="position:absolute;top:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:white;font-size:10px;padding:2px 5px;border-radius:4px;white-space:nowrap">${(latestWeather.wind_speed ?? 0).toFixed(1)} km/h ${latestWeather.wind_direction ?? 250}°</div>`, iconSize: [50, 30] as any, iconAnchor: [25, 15] as any }) as any}>
-            <Popup><div style={{ color: "#0f172a" }}><b>Wind — Real Station</b><br/>Speed {(latestWeather.wind_speed ?? 0).toFixed(1)} km/h<br/>Dir {latestWeather.wind_direction ?? 250}°<br/>Gust {((latestWeather.wind_speed ?? 0) * 1.4).toFixed(1)} km/h<br/><small>Source: Open-Meteo Archive 23 days noon IST</small></div></Popup>
-          </Marker>
-        )}
-        {activeSub === "waves" && latestOcean && (
-          // @ts-ignore
-          <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:#f97316;border:2px solid white;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5)">${(latestOcean.wave_height ?? 0).toFixed(1)}m</div>`, iconSize: [44, 44] as any, iconAnchor: [22, 22] as any }) as any}>
-            <Popup><div style={{ color: "#0f172a" }}><b>Wave — Real Station</b><br/>Height {(latestOcean.wave_height ?? 0).toFixed(2)} m<br/>Period {(latestOcean.wave_period ?? 6.2).toFixed(1)} s<br/>W→E<br/><small>Source: Open-Meteo Marine 23 days</small></div></Popup>
-          </Marker>
-        )}
+        {/* WIND FIELD — per-cell real forecast, arrows show direction, colour = speed */}
+        {activeSub === "wind" && windCells.map((c: any, i: number) => ( // @ts-ignore
+          <Marker key={"wind" + i} position={[c.lat, c.lon] as any} icon={L.divIcon({ className: "", html: `<div style="display:flex;align-items:center;gap:2px;background:${windColor(c.speed)};border:1px solid white;border-radius:999px;padding:2px 6px;box-shadow:0 1px 4px #000;white-space:nowrap"><span style="transform:rotate(${c.direction}deg);display:inline-block;font-size:11px;color:white">➤</span><span style="font-size:9px;color:white;font-weight:700">${c.speed.toFixed(0)}</span></div>`, iconSize: [42, 18] as any, iconAnchor: [21, 9] as any }) as any}><Popup><div style={{ color: "#0f172a", fontSize: 11 }}><b>Wind {c.speed.toFixed(1)} km/h gust {c.gust?.toFixed(1) ?? "—"}</b><br/>Dir {c.direction}°<br/>{c.lat.toFixed(2)},{c.lon.toFixed(2)} • Open-Meteo fresh per-cell<br/><small>Metro wind is spatially varying — each arrow is measured</small></div></Popup></Marker>
+        ))}
+        {activeSub === "wind" && windCells.length === 0 && <EmptyOverlay title="Wind — loading field" body="Sampling 9×9 per-cell forecast across Mumbai bbox (~10s)..." />}
+        {/* WAVE FIELD — per-cell Copernicus WAM height + direction, colour = height */}
+        {activeSub === "waves" && waveCells.map((c: any, i: number) => {
+          const h = c.height ?? 0
+          const dir = c.direction ?? 270
+          const sz = h < 1 ? 10 : h < 1.8 ? 13 : h < 2.5 ? 17 : 21
+          return ( // @ts-ignore
+            <Marker key={"wave" + i} position={[c.lat, c.lon] as any} icon={L.divIcon({ className: "", html: `<div title="Wave ${h.toFixed(2)}m ${dir}°" style="width:${sz}px;height:${sz}px;background:${waveColor(h)};opacity:0.78;border:1px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:7px;font-weight:700;box-shadow:0 1px 3px #000">${h.toFixed(1)}</div><div style="position:absolute;top:${-6}px;left:50%;transform:translateX(-50%) rotate(${dir}deg);font-size:9px;color:${waveColor(h)};text-shadow:0 0 2px #000">➤</div>`, iconSize: [sz, sz] as any, iconAnchor: [sz/2, sz/2] as any }) as any}><Popup><div style={{ color: "#0f172a", fontSize: 11 }}><b>Wave {h.toFixed(2)} m • Period {c.period?.toFixed(1) ?? "—"} s</b><br/>Dir {dir}°<br/>{c.lat.toFixed(3)},{c.lon.toFixed(3)} • Copernicus WAM fresh {waveTime}<br/><small>Colour green→red = height; arrow = propagation direction</small></div></Popup></Marker>
+          )
+        })}
+        {activeSub === "waves" && waveCells.length === 0 && <EmptyOverlay title="Waves — loading field" body="Copernicus WAM fresh hour (0.083°) across Mumbai bbox..." />}
         {activeSub === "weather" && latestWeather && (
           // @ts-ignore
           <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:6px;padding:4px 6px;color:white;font-size:11px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${(latestWeather.rainfall ?? 0) > 1 ? "🌧️" : (latestWeather.temperature ?? 0) > 28 ? "☀️" : "⛅"} ${(latestWeather.temperature ?? 0).toFixed(1)}°C ${(latestWeather.rainfall ?? 0).toFixed(1)}mm</div>`, iconSize: [90, 22] as any, iconAnchor: [45, 11] as any }) as any}>
@@ -184,21 +215,36 @@ export default function LeafletMap() {
             <Popup><div style={{ color: "#0f172a", minWidth: 200 }}><b>Sea Conditions — Station</b><br/>SST {(latestOcean.sst ?? 0).toFixed(1)}°C Chl {(latestOcean.chlorophyll ?? 0).toFixed(3)}<br/>Wind {latestWeather?.wind_speed?.toFixed(1) ?? "-"} km/h Wave {(latestOcean.wave_height ?? 0).toFixed(1)}m<br/><small>All values from one real buoy — not a heatmap</small></div></Popup>
           </Marker>
         )}
-        {/* Real Copernicus gridded overlay when available — per-pixel true values (replaces station marker when grid exists) */}
-        {grid.length > 0 && (activeSub === "sst" || activeSub === "currents") && grid.map((pt: any, i: number) => {
-          if (pt.lat == null || pt.lon == null) return null
-          const isCurr = activeSub === "currents"
-          const val = isCurr ? Math.sqrt((pt.uo ?? 0) ** 2 + (pt.vo ?? 0) ** 2) : (pt.thetao ?? pt.sst)
-          if (val == null || Number.isNaN(val)) return null
-          const col = isCurr ? (val < 0.2 ? "#22c55e" : val < 0.5 ? "#eab308" : "#ef4444") : (val < 28 ? "#0ea5e9" : val < 29 ? "#eab308" : "#ef4444")
-          const size = isCurr ? 14 + val * 20 : 18
-          const dir = isCurr ? (Math.atan2(pt.vo ?? 0, pt.uo ?? 0) * 180) / Math.PI : 0
+        {/* Real Copernicus currents vectors - fresh uo/vo, per-pixel real */}
+        {activeSub === "currents" && curCells.map((c: any, i: number) => {
+          const dir = (Math.atan2(c.vo, c.uo) * 180) / Math.PI
+          const sp = c.speed
           return ( // @ts-ignore
-            <Marker key={"grid" + i} position={[pt.lat, pt.lon] as any} icon={L.divIcon({ className: "", html: isCurr ? `<div style="transform:rotate(${dir}deg);font-size:14px;text-shadow:0 1px 2px #000">➤</div>` : `<div style="width:${size}px;height:${size}px;background:${col};border:1px solid white;border-radius:50%;opacity:0.85;box-shadow:0 1px 3px #000;display:flex;align-items:center;justify-content:center;color:white;font-size:8px;font-weight:600">${val.toFixed(1)}</div>`, iconSize: [size, size] as any, iconAnchor: [size / 2, size / 2] as any }) as any}>
-              <Popup><div style={{ color: "#0f172a", fontSize: 11 }}>{isCurr ? `Current ${val.toFixed(2)} m/s uo ${(pt.uo ?? 0).toFixed(2)} vo ${(pt.vo ?? 0).toFixed(2)}` : `SST ${val.toFixed(2)}°C SO ${(pt.so ?? 0).toFixed(1)} psu`}<br/>{pt.lat.toFixed(3)},{pt.lon.toFixed(3)} • Copernicus 2026-06-20<br/><small>thetao/so/uo/vo per-pixel real</small></div></Popup>
+            <Marker key={"cur" + i} position={[c.lat, c.lon] as any} icon={L.divIcon({ className: "", html: `<div style="transform:rotate(${dir.toFixed(0)}deg);font-size:14px;filter:drop-shadow(0 1px 2px #000);opacity:0.92">➤</div><div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:8px;color:${sp < 0.2 ? "#22c55e" : sp < 0.5 ? "#eab308" : "#ef4444"};font-weight:700;background:rgba(15,23,42,0.7);padding:0 3px;border-radius:3px">${sp.toFixed(2)}</div>`, iconSize: [22, 22] as any, iconAnchor: [11, 11] as any }) as any}>
+              <Popup><div style={{ color: "#0f172a", fontSize: 11 }}>Current {sp.toFixed(2)} m/s bearing {((dir + 360) % 360).toFixed(0)}°<br/>uo {c.uo.toFixed(2)} vo {c.vo.toFixed(2)}<br/>{c.lat.toFixed(3)},{c.lon.toFixed(3)} • Copernicus fresh {curTime}</div></Popup>
             </Marker>
           )
         })}
+        {activeSub === "currents" && curCells.length === 0 && <EmptyOverlay title="Currents — grid unavailable" body="Fresh NRT currents subset missing. Re-run currents fetch." />}
+        {/* Lightning — real strikes as ⚡, empty when none */}
+        {activeSub === "lightning" && lightning?.strikes?.map((s: any, i: number) => ( // @ts-ignore
+          <Marker key={"lit" + i} position={[s.lat, s.lon] as any} icon={L.divIcon({ className: "", html: `<div style="font-size:16px;filter:drop-shadow(0 1px 2px #000)">⚡</div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any} />
+        ))}
+        {/* Sea — tide strip: next high/lows as timeline (real harmonic, no mock) */}
+        {activeSub === "sea" && tideList.length > 0 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-700 rounded px-3 py-2 text-[11px] text-slate-200 z-[400] backdrop-blur flex gap-3 items-center">
+            <span className="text-slate-500 hidden sm:inline">Tides Mumbai (IST):</span>
+            {tideList.map((e: any) => (
+              <span key={e.time} className={e.type === "high" ? "text-cyan-300" : "text-amber-300"}>{tideLabel(e)}</span>
+            ))}
+          </div>
+        )}
+        {activeSub === "sea" && lightning && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-900/80 border border-slate-700 rounded px-3 py-1.5 text-[11px] text-slate-300 z-[400] backdrop-blur">
+            Thunderstorm risk: <b className={lightning?.cape?.risk === "HIGH" ? "text-red-400" : lightning?.cape?.risk === "MODERATE" ? "text-amber-400" : "text-emerald-400"}>{lightning?.cape?.risk ?? "—"}</b>
+            {lightning?.cape?.cape_max_jkg != null && <span className="text-slate-500"> • CAPE {lightning.cape.cape_max_jkg} J/kg</span>}
+          </div>
+        )}
 
         {shouldShowEez && eez && ( // @ts-ignore
           <RLGeoJSON data={eez} style={{ color: "#0ea5e9", weight: 2, dashArray: "8 8", fillColor: "#0ea5e9", fillOpacity: 0.06 } as any} onEachFeature={(f: any, l: any) => l.bindPopup(`<b>${f.properties?.name || "EEZ"}</b><br/>${f.properties?.boundary_type || ""}`)} />

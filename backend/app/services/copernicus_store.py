@@ -11,6 +11,8 @@ log = structlog.get_logger()
 
 _CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
 _SST_CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
+_CUR_CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
+_WAV_CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
 
 
 def _grid_file(name: str) -> Optional[Path]:
@@ -81,6 +83,135 @@ def chl_series(latitude: float, longitude: float) -> List[Dict[str, Any]]:
     except Exception as e:
         log.warning("chl_series_failed", error=str(e))
         return []
+
+
+def _load_currents():
+    """Fresh NRT currents grid (phy hourly uo/vo, 0.083deg), cached by mtime."""
+    import xarray as _xr
+    fp = _grid_file("mumbai_currents_fresh.nc")
+    if fp is None:
+        return None
+    mt = fp.stat().st_mtime
+    if _CUR_CACHE["ds"] is None or _CUR_CACHE["mtime"] != mt:
+        if _CUR_CACHE["ds"] is not None:
+            try:
+                _CUR_CACHE["ds"].close()
+            except Exception:
+                pass
+        ds = _xr.open_dataset(str(fp))
+        _CUR_CACHE.update({"mtime": mt, "ds": ds})
+    return _CUR_CACHE["ds"]
+
+
+def _load_waves():
+    """Fresh NRT wave grid (WAM VHM0/VTM02/VMDR, 0.083deg), cached by mtime."""
+    import xarray as _xr
+    fp = _grid_file("mumbai_waves_fresh.nc")
+    if fp is None:
+        return None
+    mt = fp.stat().st_mtime
+    if _WAV_CACHE["ds"] is None or _WAV_CACHE["mtime"] != mt:
+        if _WAV_CACHE["ds"] is not None:
+            try:
+                _WAV_CACHE["ds"].close()
+            except Exception:
+                pass
+        ds = _xr.open_dataset(str(fp))
+        _WAV_CACHE.update({"mtime": mt, "ds": ds})
+    return _WAV_CACHE["ds"]
+
+
+def waves_cells(bbox, max_cells: int = 280):
+    """Wave field for the map - height + period + direction, latest time, land masked."""
+    import numpy as _np
+    min_lon, min_lat, max_lon, max_lat = bbox
+    try:
+        ds = _load_waves()
+        if ds is None:
+            return [], None
+        # latest 3-hour slot is the most recent valid; WAV is PT3H
+        arr_h = ds["VHM0"].isel(time=-1)
+        arr_p = ds["VTM02"].isel(time=-1) if "VTM02" in ds.data_vars else None
+        arr_d = ds["VMDR"].isel(time=-1) if "VMDR" in ds.data_vars else None
+        tdate = str(ds.time.values[-1])[:16]
+        lats, lons = ds.latitude.values, ds.longitude.values
+        in_lat = [i for i, la in enumerate(lats) if min_lat <= la <= max_lat]
+        in_lon = [j for j, lo in enumerate(lons) if min_lon <= lo <= max_lon]
+        if not in_lat or not in_lon:
+            return [], tdate
+        stride = max(1, int((len(in_lat) * len(in_lon) / max_cells) ** 0.5))
+        cells = []
+        for ii in range(0, len(in_lat), stride):
+            for jj in range(0, len(in_lon), stride):
+                i, j = in_lat[ii], in_lon[jj]
+                h = arr_h.values[i, j]
+                try:
+                    if _np.isnan(h):
+                        continue
+                except Exception:
+                    if h is None:
+                        continue
+                d = {"lat": round(float(lats[i]), 4), "lon": round(float(lons[j]), 4),
+                     "height": round(float(h), 2)}
+                if arr_p is not None:
+                    try:
+                        d["period"] = round(float(arr_p.values[i, j]), 1) if not _np.isnan(arr_p.values[i, j]) else None
+                    except Exception:
+                        d["period"] = None
+                if arr_d is not None:
+                    try:
+                        d["direction"] = round(float(arr_d.values[i, j]), 0) if not _np.isnan(arr_d.values[i, j]) else None
+                    except Exception:
+                        d["direction"] = None
+                cells.append(d)
+        return cells, tdate
+    except Exception as e:
+        log.warning("waves_cells_failed", error=str(e))
+        return [], None
+
+
+def currents_cells(bbox, max_cells: int = 280):
+    """Currents vectors for the streamlines layer.
+
+    Latest hour slice, strided to max_cells. Returns
+    [{lat, lon, uo, vo, speed, time}]. Land masked; one vector per cell.
+    """
+    import math as _math
+    import numpy as _np
+    min_lon, min_lat, max_lon, max_lat = bbox
+    try:
+        ds = _load_currents()
+        if ds is None:
+            return [], None
+        tdate = str(ds.time.values[-1])[:16]
+        lats = ds.latitude.values
+        lons = ds.longitude.values
+        in_lat = [i for i, la in enumerate(lats) if min_lat <= la <= max_lat]
+        in_lon = [j for j, lo in enumerate(lons) if min_lon <= lo <= max_lon]
+        if not in_lat or not in_lon:
+            return [], tdate
+        stride = max(1, int((len(in_lat) * len(in_lon) / max_cells) ** 0.5))
+        uo_arr = ds["uo"].isel(depth=0, time=-1) if "depth" in ds["uo"].dims else ds["uo"].isel(time=-1)
+        vo_arr = ds["vo"].isel(depth=0, time=-1) if "depth" in ds["vo"].dims else ds["vo"].isel(time=-1)
+        cells = []
+        for ii in range(0, len(in_lat), stride):
+            for jj in range(0, len(in_lon), stride):
+                i, j = in_lat[ii], in_lon[jj]
+                uo, vo = uo_arr.values[i, j], vo_arr.values[i, j]
+                try:
+                    if _np.isnan(uo) or _np.isnan(vo):
+                        continue
+                except Exception:
+                    if uo is None or vo is None:
+                        continue
+                sp = float(_math.hypot(float(uo), float(vo)))
+                cells.append({"lat": round(float(lats[i]), 4), "lon": round(float(lons[j]), 4),
+                              "uo": round(float(uo), 3), "vo": round(float(vo), 3),
+                              "speed": round(sp, 3)})
+        return cells, tdate
+    except Exception as e:
+        log.warning("currents_cells_failed", error=str(e))
+        return [], None
 
 
 def _load_sst():
