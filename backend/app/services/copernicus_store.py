@@ -10,17 +10,22 @@ import structlog
 log = structlog.get_logger()
 
 _CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
+_SST_CACHE: Dict[str, Any] = {"mtime": 0, "ds": None, "path": None}
 
 
-def _grid_path() -> Optional[Path]:
+def _grid_file(name: str) -> Optional[Path]:
     here = Path(__file__).resolve()
     for cand in [
-        here.parents[3] / "data" / "raw_copernicus" / "mumbai_chl_fresh.nc",
-        Path(r"D:\Foram_TP\ORCA\data\raw_copernicus\mumbai_chl_fresh.nc"),
+        here.parents[3] / "data" / "raw_copernicus" / name,
+        Path(r"D:\Foram_TP\ORCA\data\raw_copernicus") / name,
     ]:
         if cand.exists():
             return cand
     return None
+
+
+def _grid_path() -> Optional[Path]:
+    return _grid_file("mumbai_chl_fresh.nc")
 
 
 def chl_series(latitude: float, longitude: float) -> List[Dict[str, Any]]:
@@ -76,3 +81,81 @@ def chl_series(latitude: float, longitude: float) -> List[Dict[str, Any]]:
     except Exception as e:
         log.warning("chl_series_failed", error=str(e))
         return []
+
+
+def _load_sst():
+    """Fresh NRT SST grid (phy hourly thetao, 0.083deg), cached by mtime."""
+    import xarray as _xr
+    fp = _grid_file("mumbai_sst_fresh.nc")
+    if fp is None:
+        return None
+    mt = fp.stat().st_mtime
+    if _SST_CACHE["ds"] is None or _SST_CACHE["mtime"] != mt:
+        if _SST_CACHE["ds"] is not None:
+            try:
+                _SST_CACHE["ds"].close()
+            except Exception:
+                pass
+        ds = _xr.open_dataset(str(fp))
+        _SST_CACHE.update({"mtime": mt, "ds": ds})
+    return _SST_CACHE["ds"]
+
+
+def grid_cells(kind: str, bbox, max_cells: int = 300):
+    """Full spatial grid for map layers. kind: 'sst' | 'chl'.
+
+    Latest time slice, strided to max_cells. Returns
+    [{lat, lon, value, time}]. Values are real NetCDF cells, land masked.
+    """
+    import numpy as _np
+    min_lon, min_lat, max_lon, max_lat = bbox
+    try:
+        if kind == "sst":
+            ds = _load_sst()
+            var = "thetao"
+        else:
+            fp = _grid_path()
+            if fp is None:
+                return [], None
+            mt = fp.stat().st_mtime
+            if _CACHE["ds"] is None or _CACHE["mtime"] != mt:
+                import xarray as _xr
+                if _CACHE["ds"] is not None:
+                    try:
+                        _CACHE["ds"].close()
+                    except Exception:
+                        pass
+                _CACHE.update({"mtime": mt, "ds": _xr.open_dataset(str(fp))})
+            ds = _CACHE["ds"]
+            var = "chl"
+        if ds is None:
+            return [], None
+        arr = ds[var]
+        if "depth" in arr.dims:
+            arr = arr.isel(depth=0)
+        arr = arr.isel(time=-1)
+        tdate = str(ds.time.values[-1])[:16]
+        lats = ds.latitude.values
+        lons = ds.longitude.values
+        in_lat = [i for i, la in enumerate(lats) if min_lat <= la <= max_lat]
+        in_lon = [j for j, lo in enumerate(lons) if min_lon <= lo <= max_lon]
+        if not in_lat or not in_lon:
+            return [], tdate
+        stride = max(1, int((len(in_lat) * len(in_lon) / max_cells) ** 0.5))
+        cells = []
+        for ii in range(0, len(in_lat), stride):
+            for jj in range(0, len(in_lon), stride):
+                i, j = in_lat[ii], in_lon[jj]
+                v = arr.values[i, j]
+                try:
+                    bad = bool(_np.isnan(v))
+                except Exception:
+                    bad = v is None
+                if bad:
+                    continue
+                cells.append({"lat": round(float(lats[i]), 4), "lon": round(float(lons[j]), 4),
+                              "value": round(float(v), 3)})
+        return cells, tdate
+    except Exception as e:
+        log.warning("grid_cells_failed", kind=kind, error=str(e))
+        return [], None

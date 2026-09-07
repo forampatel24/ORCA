@@ -38,6 +38,10 @@ export default function LeafletMap() {
   const [routeLine, setRouteLine] = useState<[number, number][]>([])
   const [grid, setGrid] = useState<any[]>([]) // real Copernicus grid when available
   const [vessels, setVessels] = useState<any[]>([]) // live GFW v3 fishing events
+  const [sstCells, setSstCells] = useState<any[]>([]) // fresh NRT SST grid 0.083deg
+  const [sstTime, setSstTime] = useState<string>("")
+  const [chlCells, setChlCells] = useState<any[]>([]) // fresh NRT chl grid 0.25deg
+  const [chlTime, setChlTime] = useState<string>("")
 
   useEffect(() => {
     fetch("/india_states.geojson")
@@ -74,10 +78,18 @@ export default function LeafletMap() {
     const headers: any = token ? { Authorization: "Bearer " + token } : {}
     const lat = 19.076, lon = 72.877
     if (["sst", "chl", "waves", "sea", "wind", "weather", "currents"].includes(activeSub)) {
-      api.get("/ocean/history", { params: { latitude: lat, longitude: lon, limit: 23 }, headers }).then((r) => setOceanHistory(r.data.items || [])).catch(() => {})
-      api.get("/weather/", { params: { latitude: lat, longitude: lon, limit: 23 }, headers }).then((r) => setWeather(r.data.items || [])).catch(() => {})
+      api.get("/ocean/history", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setOceanHistory(r.data.items || [])).catch(() => {})
+      api.get("/weather/", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setWeather(r.data.items || [])).catch(() => {})
       // Try real gridded Copernicus endpoint if backend exposes it
       api.get("/ocean/grid", { params: { bbox: "72.2,18.5,73.2,19.5" }, headers }).then((r) => setGrid(r.data.points || r.data.items || [])).catch(() => setGrid([]))
+    }
+    if (activeSub === "sst") {
+      // Full spatial SST layer - fresh NRT grid, every cell a real value
+      fetch(`/api/v1/ocean/sst-grid?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { setSstCells(d.cells || []); setSstTime(d.time || "") }).catch(() => { setSstCells([]); setSstTime("") })
+    }
+    if (activeSub === "chl") {
+      // Full spatial chlorophyll layer - fresh NRT grid, every cell a real value
+      fetch(`/api/v1/ocean/chlorophyll-grid?bbox=71.8,15.5,74.5,20.5`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { setChlCells(d.cells || []); setChlTime(d.time || "") }).catch(() => { setChlCells([]); setChlTime("") })
     }
     if (["cyclone", "lightning", "alerts"].includes(activeSub)) {
       api.get("/hazards/", { params: { latitude: lat, longitude: lon, radius: 100 }, headers }).then((r) => setHazards(r.data.items || [])).catch(() => setHazards([]))
@@ -107,6 +119,9 @@ export default function LeafletMap() {
   const latestWeather = weather[weather.length - 1] || weather[0]
   const STA_LAT = 19.076, STA_LON = 72.877
 
+  const sstColor = (v: number) => v < 27.5 ? "#1d4ed8" : v < 28.2 ? "#0284c7" : v < 28.8 ? "#06b6d4" : v < 29.4 ? "#eab308" : v < 30 ? "#f97316" : "#ef4444"
+  const chlColor = (v: number) => v < 0.15 ? "#1e3a8a" : v < 0.25 ? "#0284c7" : v < 0.4 ? "#10b981" : v < 0.7 ? "#22c55e" : "#4d7c0f"
+
   return (
     <div className="relative h-full w-full">
       {/* @ts-ignore */}
@@ -129,19 +144,22 @@ export default function LeafletMap() {
         {shouldShowPfz && pfz.length === 0 && pfzGeo?.features?.length ? pfzGeo.features.slice(0, 30).map((f: any, i: number) => { const c = f.geometry.coordinates; return ( // @ts-ignore
           <Marker key={f.properties.id || i} position={[c[1], c[0]] as any} icon={pfzIcon(false) as any}><Popup><div style={{ color: "#0f172a" }}><b>PFZ {f.properties.latitude?.toFixed(2)}</b><br/><small>{f.properties.observation_time?.slice(0, 10)}</small></div></Popup></Marker>) }) : null}
 
-        {/* SINGLE REAL STATION MARKER — honest, not scattered */}
-        {activeSub === "sst" && latestOcean && (
-          // @ts-ignore
-          <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:#0ea5e9;border:2px solid white;border-radius:8px;padding:5px 7px;color:white;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);white-space:nowrap">🌡️ SST ${(latestOcean.sst ?? 0).toFixed(1)}°C</div>`, iconSize: [110, 28] as any, iconAnchor: [55, 14] as any }) as any}>
-            <Popup><div style={{ color: "#0f172a", minWidth: 200 }}><b>Sea Surface Temperature — Real Station</b><br/>Location: {STA_LAT}°N, {STA_LON}°E (Mumbai buoy, water)<br/>Latest: {(latestOcean.sst ?? 0).toFixed(1)}°C on {latestOcean.observation_time?.slice(0, 10)}<br/>Series 15 Aug–06 Sep (23 days) in chart below<br/><small>Source: Open-Meteo Marine 23 days • Copernicus gridded coming</small><br/><small>Per-pixel heatmap needs gridded NetCDF — this marker is the honest single-point value</small></div></Popup>
-          </Marker>
-        )}
-        {activeSub === "chl" && latestOcean && (
-          // @ts-ignore
-          <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:#16a34a;border:2px solid white;border-radius:8px;padding:5px 7px;color:white;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);white-space:nowrap">🌿 Chl ${(latestOcean.chlorophyll ?? 0).toFixed(3)} mg/m³</div>`, iconSize: [130, 28] as any, iconAnchor: [65, 14] as any }) as any}>
-            <Popup><div style={{ color: "#0f172a", minWidth: 220 }}><b>Chlorophyll-a — Real Station</b><br/>{(latestOcean.chlorophyll ?? 0).toFixed(3)} mg/m³ at {STA_LAT},{STA_LON}<br/>23-day flat 0.139 = Open-Meteo has no chl, fallback<br/><small>Real per-pixel chl needs Copernicus OCEANCOLOUR GLO BGC (chl file 2026-05-31 already on disk, ingesting)</small></div></Popup>
-          </Marker>
-        )}
+        {/* FULL SST GRID — every cell a real NRT value, PFZ overlaid */}
+        {activeSub === "sst" && sstCells.map((c: any, i: number) => ( // @ts-ignore
+          <Marker key={"sst" + i} position={[c.lat, c.lon] as any} icon={L.divIcon({ className: "", html: `<div title="SST ${c.value}°C" style="width:13px;height:13px;background:${sstColor(c.value)};opacity:0.78;border-radius:3px"></div>`, iconSize: [13, 13] as any, iconAnchor: [6, 6] as any }) as any} />
+        ))}
+        {activeSub === "sst" && sstCells.length > 0 && pfz.map((p: any) => ( // @ts-ignore
+          <Marker key={"sst-pfz" + p.id} position={[p.latitude, p.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:9px;height:9px;background:#22c55e;border:2px solid white;border-radius:50%;box-shadow:0 0 4px #000"></div>`, iconSize: [9, 9] as any, iconAnchor: [4, 4] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b style={{ color: "#22c55e" }}>{p.landing_centre || p.metadata?.landing_centre || "PFZ"}</b><br/><small>SST {p.sst ?? p.metadata?.sst ?? "-"}°C • Chl {p.chlorophyll ?? p.metadata?.chlorophyll ?? "-"} mg/m³</small><br/><small>{p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</small></div></Popup></Marker>
+        ))}
+        {activeSub === "sst" && sstCells.length === 0 && <EmptyOverlay title="SST grid — unavailable" body="Fresh NRT subset missing. Re-run cm_download SST." />}
+        {/* FULL CHLOROPHYLL GRID — every cell a real NRT value, PFZ overlaid */}
+        {activeSub === "chl" && chlCells.map((c: any, i: number) => ( // @ts-ignore
+          <Marker key={"chl" + i} position={[c.lat, c.lon] as any} icon={L.divIcon({ className: "", html: `<div title="Chl ${c.value} mg/m³" style="width:15px;height:15px;background:${chlColor(c.value)};opacity:0.78;border-radius:3px"></div>`, iconSize: [15, 15] as any, iconAnchor: [7, 7] as any }) as any} />
+        ))}
+        {activeSub === "chl" && chlCells.length > 0 && pfz.map((p: any) => ( // @ts-ignore
+          <Marker key={"chl-pfz" + p.id} position={[p.latitude, p.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:9px;height:9px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 4px #000"></div>`, iconSize: [9, 9] as any, iconAnchor: [4, 4] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b style={{ color: "#22c55e" }}>{p.landing_centre || p.metadata?.landing_centre || "PFZ"}</b><br/><small>SST {p.sst ?? p.metadata?.sst ?? "-"}°C • Chl {p.chlorophyll ?? p.metadata?.chlorophyll ?? "-"} mg/m³</small><br/><small>{p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</small></div></Popup></Marker>
+        ))}
+        {activeSub === "chl" && chlCells.length === 0 && <EmptyOverlay title="Chlorophyll grid — unavailable" body="Fresh NRT subset missing. Re-run cm_download." />}
         {activeSub === "wind" && latestWeather && (
           // @ts-ignore
           <Marker position={[STA_LAT, STA_LON] as any} icon={L.divIcon({ className: "", html: `<div style="background:white;border:1.5px solid #334155;border-radius:8px;padding:4px 6px;color:#0f172a;font-size:11px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.4);transform:rotate(${latestWeather.wind_direction ?? 250}deg)">➤</div><div style="position:absolute;top:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:white;font-size:10px;padding:2px 5px;border-radius:4px;white-space:nowrap">${(latestWeather.wind_speed ?? 0).toFixed(1)} km/h ${latestWeather.wind_direction ?? 250}°</div>`, iconSize: [50, 30] as any, iconAnchor: [25, 15] as any }) as any}>

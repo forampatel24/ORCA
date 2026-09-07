@@ -12,8 +12,8 @@ const qc = new QueryClient()
 function LegendBar({ activeSub }: { activeSub: string | null }) {
   if (!activeSub) return null
   const legends: Record<string, { title: string; gradient: string; labels: [string, string]; note: string }> = {
-    sst: { title: "SST (°C)", gradient: "from-blue-900 via-cyan-500 via-yellow-400 to-red-500", labels: ["26°C", "30°C"], note: "Open-Meteo Marine 23 days" },
-    chl: { title: "Chlorophyll (mg/m³)", gradient: "from-blue-900 via-emerald-500 to-green-700", labels: ["0.1", "2.0"], note: "Copernicus 0.139" },
+    sst: { title: "SST (°C)", gradient: "from-blue-900 via-cyan-500 via-yellow-400 to-red-500", labels: ["27°C", "30°C"], note: "Copernicus NRT 0.083° + PFZ" },
+    chl: { title: "Chlorophyll (mg/m³)", gradient: "from-blue-900 via-emerald-500 to-green-700", labels: ["0.1", "0.7"], note: "Copernicus NRT 0.25° + PFZ" },
     waves: { title: "Wave Height (m)", gradient: "from-emerald-600 via-yellow-500 via-orange-500 to-red-600", labels: ["0.5m", "2.0m"], note: "Open-Meteo Marine" },
     wind: { title: "Wind Speed (km/h)", gradient: "from-slate-600 via-sky-500 to-blue-700", labels: ["5", "25"], note: "Open-Meteo Archive" },
     pfz: { title: "PFZ Suitability", gradient: "from-sky-600 via-green-500 to-emerald-600", labels: ["Low", "High"], note: "INCOIS 46 zones" },

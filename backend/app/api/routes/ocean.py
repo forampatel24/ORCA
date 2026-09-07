@@ -27,6 +27,32 @@ async def chlorophyll_history(latitude: float, longitude: float):
     return {"items": items, "count": len(items),
             "source": "copernicus_bgc-pft_anfc Mumbai 01-07 Sep 2026, nearest 0.25deg cell"}
 
+@router.get("/sst-grid")
+async def sst_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
+    # Public read. Full spatial SST from fresh NRT grid (phy hourly thetao,
+    # 0.083deg, latest hour) for the SST map layer. No mocks.
+    from app.services.copernicus_store import grid_cells
+    try:
+        bb = tuple(map(float, bbox.split(",")))
+    except Exception:
+        bb = (71.8, 15.5, 74.5, 20.5)
+    cells, tdate = grid_cells("sst", bb)
+    return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
+            "source": "copernicus_phy_anfc hourly thetao 0.083deg Mumbai"}
+
+@router.get("/chlorophyll-grid")
+async def chlorophyll_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
+    # Public read. Full spatial chlorophyll from fresh NRT grid (bgc-pft_anfc,
+    # 0.25deg, latest day) for the chlorophyll map layer. No mocks.
+    from app.services.copernicus_store import grid_cells
+    try:
+        bb = tuple(map(float, bbox.split(",")))
+    except Exception:
+        bb = (71.8, 15.5, 74.5, 20.5)
+    cells, tdate = grid_cells("chl", bb)
+    return {"count": len(cells), "bbox": bbox, "time": tdate, "cells": cells,
+            "source": "copernicus_bgc-pft_anfc daily chl 0.25deg Mumbai"}
+
 @router.get("/grid")
 async def ocean_grid(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
     """Real Copernicus gridded per-pixel values — thetao/sst, so, uo, vo, current_speed, chlorophyll. Water only (land NaN masked)."""
