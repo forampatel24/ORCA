@@ -1,10 +1,45 @@
 """Risk routes - live deterministic assessment from Mumbai observations, no mock."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from app.analytics.risk.engine import calculate_risk
 from app.schemas.risk import RiskResponse, RiskFactor
 import datetime
 
 router = APIRouter()
+
+@router.get("/trend")
+async def risk_trend(days: int = Query(default=30, le=60), latitude: float = 19.076, longitude: float = 72.877):
+    """Past N days deterministic risk - same engine as /assess, per-day wind/wave + hazards."""
+    import psycopg as _psycopg
+    from app.database.connection import psycopg_conninfo
+    from app.tools.geospatial import check_geofence
+    g = check_geofence(latitude, longitude)
+    inside = bool(g.get("inside_geofence") or g.get("inside_protected"))
+    conn = _psycopg.connect(psycopg_conninfo())
+    cur = conn.cursor()
+    # weather + ocean aligned by date (noon)
+    cur.execute("""
+        SELECT w.observation_time::date AS d, w.wind_speed, w.rainfall, o.wave_height, o.wave_period
+        FROM weather_observations w
+        LEFT JOIN ocean_observations o ON o.observation_time::date = w.observation_time::date
+          AND ST_Within(o.location::geometry, ST_MakeEnvelope(72.2,18.5,73.2,19.5,4326))
+        WHERE ST_Within(w.location::geometry, ST_MakeEnvelope(72.2,18.5,73.2,19.5,4326))
+        ORDER BY d ASC
+    """)
+    rows = cur.fetchall()
+    # keep last N days
+    rows = rows[-days:] if len(rows) > days else rows
+    # hazards per day
+    cur.execute("SELECT hazard_type, valid_from::date, valid_to::date FROM marine_hazards WHERE valid_to > now() - interval '60 days'")
+    hazs = cur.fetchall()
+    conn.close()
+    items = []
+    for d, wind, rain, wave, period in rows:
+        has_cycl = any(h[0] == "cyclone" and h[1] <= d <= h[2] for h in hazs if h[1] and h[2])
+        has_light = any(h[0] == "lightning" and h[1] <= d <= h[2] for h in hazs if h[1] and h[2])
+        r = calculate_risk(wind_speed=wind or 0, wave_height=wave or 0, wave_period=period or 0, rainfall=rain or 0,
+                           lightning=has_light, cyclone=has_cycl, inside_geofence=inside)
+        items.append({"date": d.isoformat(), "risk_score": r["risk_score"], "risk_level": r["risk_level"], "factors": r["risk_factors"]})
+    return {"count": len(items), "items": items, "source": "risk/engine.py live per-day wind/wave + marine_hazards"}
 
 @router.post("/assess", response_model=RiskResponse)
 async def assess_risk(latitude: float, longitude: float):

@@ -86,7 +86,7 @@ export default function VisualizationSidebar() {
   }
 
   return (
-    <div className="w-[320px] shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col h-[calc(100vh-57px)]">
+    <div className="w-[320px] shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col min-h-[calc(100vh-57px)] self-stretch">
       <div className="p-3 border-b border-slate-800 flex justify-between items-center">
         <div className="text-sm font-semibold tracking-wide">VISUALIZATIONS</div>
         <button onClick={() => setSidebarOpen(false)} className="text-xs bg-slate-800 px-2 py-1 rounded hover:bg-slate-700 border border-slate-700">

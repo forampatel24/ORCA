@@ -115,9 +115,9 @@ function Dashboard() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 items-stretch">
         {/* Left — Chat */}
-        <div className="w-[380px] shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col">
+        <div className="w-[380px] shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col self-stretch">
           <div className="flex-1 min-h-0 p-2">
             <ChatPanel />
           </div>
@@ -131,7 +131,7 @@ function Dashboard() {
         </div>
 
         {/* Center — Map */}
-        <div className="flex-1 min-w-0 flex flex-col bg-slate-950 p-3 gap-3">
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-950 p-3 gap-3 self-stretch">
           <VesselPositionBar />
           <div className="flex-1 min-h-[420px] relative flex flex-col">
             <div className="flex justify-between items-center mb-2 gap-2">
