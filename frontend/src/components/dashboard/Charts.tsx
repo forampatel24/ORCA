@@ -45,9 +45,9 @@ export function ChlorophyllChart() {
   const [chl, setChl] = useState<number[]>([])
   useEffect(() => {
     const fetchChl = async () => {
-      // Real Copernicus NRT chlorophyll first - no flat mock fallback
+      // Real Copernicus NRT chlorophyll first - 7 days for command centre (no flat mock fallback)
       try {
-        const res = await api.get('/ocean/chlorophyll-history', { params: { latitude: 19.076, longitude: 72.877 } })
+        const res = await api.get('/ocean/chlorophyll-history', { params: { latitude: 19.076, longitude: 72.877, limit: 7 } })
         const items = res.data.items || []
         if (items.length) {
           setDates(items.map((r: any) => new Date(r.observation_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })))

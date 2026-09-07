@@ -19,11 +19,13 @@ async def ocean_history(latitude: float, longitude: float, limit: int = 7):
     return {"items": [{"sst": r[0], "chlorophyll": r[1], "wave_height": r[2], "observation_time": r[3].isoformat() if r[3] else None} for r in rows]}
 
 @router.get("/chlorophyll-history")
-async def chlorophyll_history(latitude: float, longitude: float):
+async def chlorophyll_history(latitude: float, longitude: float, limit: int = Query(default=7, le=60)):
     # Public read. Real daily chlorophyll from the fresh Copernicus NRT grid
     # (bgc-pft_anfc, 0.25deg), nearest cell to the point. No mock fallback.
+    # limit caps to past N days to today (7 for command centre, 30 for dashboard).
     from app.services.copernicus_store import chl_series
     items = chl_series(latitude, longitude)
+    items = items[-limit:] if limit and len(items) > limit else items
     return {"items": items, "count": len(items),
             "source": "copernicus_bgc-pft_anfc Mumbai 01-07 Sep 2026, nearest 0.25deg cell"}
 
@@ -97,7 +99,7 @@ async def wind_grid(bbox: str = Query(default="71.8,15.5,74.5,20.5")):
 
 
 @router.get("/tides")
-async def tides_live(hours: int = Query(default=48, le=120)):
+async def tides_live(hours: int = Query(default=48, le=800)):
     """Mumbai tides - harmonic prediction (Admiralty constituents), no mock series."""
     from app.services.tide_store import tides_window, tide_extremes
     return {"extremes": tide_extremes(hours=hours), "series": tides_window(hours=hours),

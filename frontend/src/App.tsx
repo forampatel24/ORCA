@@ -7,6 +7,8 @@ import { useVizStore } from "./stores/vizStore"
 import { useMapStore } from "./stores/mapStore"
 import { useChatStore } from "./stores/chatStore"
 import { SstChart, ChlorophyllChart } from "./components/dashboard/Charts"
+import DashboardPage from "./pages/DashboardPage"
+import { useState } from "react"
 
 const qc = new QueryClient()
 
@@ -79,6 +81,25 @@ function Dashboard() {
   const { activeSub } = useVizStore()
   const { messages } = useChatStore()
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant")
+  const [view, setView] = useState<"command" | "dashboard">("command")
+
+  if (view === "dashboard") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+        <header className="border-b border-slate-800 px-4 py-3 flex justify-between items-center bg-slate-950">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">ORCA — Marine Intelligence Command Center</h1>
+            <p className="text-[11px] text-slate-400">Mumbai coastal operating area • Live analytics • Switch views</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setView("command")} className="px-3 py-1.5 rounded text-xs border bg-slate-800 border-slate-700 text-slate-300">← Command Center</button>
+            <span className="px-2 py-1 bg-emerald-900/30 border border-emerald-700 rounded text-emerald-300 text-[11px]">● Live</span>
+          </div>
+        </header>
+        <DashboardPage />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -88,6 +109,7 @@ function Dashboard() {
           <p className="text-[11px] text-slate-400">Mumbai coastal operating area • 72.2,18.5,73.2,19.5 • 46 PFZ • 23-day SST/Wave • Chat+Map sync</p>
         </div>
         <div className="text-xs text-slate-500 flex items-center gap-3">
+          <button onClick={() => setView("dashboard")} className="px-3 py-1.5 rounded text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 border border-sky-500">📊 Analytics Dashboard</button>
           <span className="hidden sm:inline">PFZ {pfz.length} • Ocean 23 • Weather 23</span>
           <span className="px-2 py-1 bg-emerald-900/30 border border-emerald-700 rounded text-emerald-300 text-[11px]">● Live</span>
         </div>
