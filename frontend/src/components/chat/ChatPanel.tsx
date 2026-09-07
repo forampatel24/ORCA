@@ -6,7 +6,7 @@ import { chat, getNearestPFZ, login } from '../../api/client'
 export default function ChatPanel() {
   const [input, setInput] = useState('')
   const { messages, addMessage, loading, setLoading } = useChatStore()
-  const { setPfz, setCenter, setSelected } = useMapStore()
+  const { setCenter, setSelected } = useMapStore()
 
   async function ensureLogin() {
     if (!localStorage.getItem('orca_token')) {
@@ -34,7 +34,7 @@ export default function ChatPanel() {
           lon=72.8; lat=19.0
         }
         const pfzData = await getNearestPFZ(lat, lon, 150)
-        setPfz(pfzData.items || [])
+        // Keep the full live set (21) on the map - chat only moves center/selection
         if (pfzData.items?.length) {
           // show all PFZ for that region, center on map-provided center
           setSelected(pfzData.items[0])

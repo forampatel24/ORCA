@@ -54,7 +54,11 @@
     image: postgis/postgis:16-3.4-alpine
     container_name: orca-postgres
     ports:
+      # Team default is 5432. 5433 is a fallback for machines that already run
+      # a native PostgreSQL on 5432 (it cannot be stopped without admin rights).
+      # Such machines point DATABASE_URL at localhost:5433 (see .env comment).
       - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:

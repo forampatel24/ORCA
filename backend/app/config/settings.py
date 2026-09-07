@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     # Provider endpoints - env overrideable for authentic sources
     incois_pfz_wms: str = Field(default="https://www.incois.gov.in/MarineFisheries/PfzWebGis")
     open_meteo_api: str = Field(default="https://api.open-meteo.com/v1/forecast")
-    gfw_api: str = Field(default="https://api.globalfishingwatch.org/v2")
+    gfw_api: str = Field(default="https://gateway.api.globalfishingwatch.org/v3")
+    gfw_api_token: str = Field(default="")
     copernicus_username: str = Field(default="")
     copernicus_password: str = Field(default="")
 

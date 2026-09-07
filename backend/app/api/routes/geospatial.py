@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from app.api.deps import get_current_user
 import psycopg, json
+from app.database.connection import psycopg_conninfo
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ async def get_coastline(bbox: str = Query(default="72.2,18.5,73.2,19.5", descrip
         min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
     except:
         min_lon, min_lat, max_lon, max_lat = 72.2, 18.5, 73.2, 19.5
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     # Return geofences coastline as GeoJSON - from DB, not hardcoded array
     # Use parameterized ILIKE to avoid psycopg %c placeholder error
@@ -50,7 +51,7 @@ async def get_eez(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
         min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
     except:
         min_lon, min_lat, max_lon, max_lat = 72.2, 18.5, 73.2, 19.5
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("""
         SELECT json_build_object('type','FeatureCollection','features', COALESCE(json_agg(ST_AsGeoJSON(geometry)::jsonb || jsonb_build_object('properties', jsonb_build_object('name', name, 'boundary_type', boundary_type, 'country', country))), '[]'::json))::text
@@ -68,7 +69,7 @@ async def get_mpa(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
         min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
     except:
         min_lon, min_lat, max_lon, max_lat = 72.2, 18.5, 73.2, 19.5
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("""
         SELECT json_build_object('type','FeatureCollection','features', COALESCE(json_agg(ST_AsGeoJSON(geometry)::jsonb || jsonb_build_object('properties', jsonb_build_object('name', name, 'area_type', area_type, 'authority', authority))), '[]'::json))::text
@@ -86,7 +87,7 @@ async def get_pfz_geojson(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
         min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
     except:
         min_lon, min_lat, max_lon, max_lat = 72.2, 18.5, 73.2, 19.5
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("""
         SELECT json_build_object('type','FeatureCollection','features', COALESCE(json_agg(jsonb_build_object('type','Feature','geometry', ST_AsGeoJSON(geometry)::jsonb, 'properties', jsonb_build_object('id', id::text, 'latitude', latitude, 'longitude', longitude, 'metadata', metadata, 'observation_time', observation_time))), '[]'::json))::text

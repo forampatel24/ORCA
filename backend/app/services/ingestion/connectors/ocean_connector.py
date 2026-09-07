@@ -6,6 +6,7 @@ No hardcoded sst 28.2 / chl 0.8 / wave 1.2.
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 import httpx, structlog, os
+from app.database.connection import psycopg_conninfo
 from app.services.ingestion.base import BaseConnector
 from app.config.mumbai import MUMBAI_BBOX, MUMBAI_POINT, OPEN_METEO_API
 
@@ -70,7 +71,7 @@ class OceanConnector(BaseConnector):
         # 2. Try INCOIS OSF SST via OPeNDAP subset (if reachable) - else use DB Mumbai slice
         try:
             import psycopg
-            conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+            conn = psycopg.connect(psycopg_conninfo())
             cur = conn.cursor()
             cur.execute("""
                 SELECT sst, chlorophyll, wave_height, wave_period, observation_time, location

@@ -11,14 +11,14 @@ export function SstChart() {
     const fetchData = async () => {
       try {
         const headers: any = token ? { Authorization: 'Bearer ' + token } : {}
-        const res = await api.get('/ocean/history', { params: { latitude: 19.076, longitude: 72.877, limit: 23 }, headers })
+        const res = await api.get('/ocean/history', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers })
         const items = res.data.items || []
         const labels = items.map((r:any) => r.observation_time ? new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '')
         const temps = items.map((r:any) => r.sst ?? null)
-        setDates(labels.length ? labels : ['15 Aug','06 Sep'])
+        setDates(labels.length ? labels : ['01 Sep','07 Sep'])
         setSst(temps.length ? temps : [28.1,29.9])
       } catch {
-        const res = await api.get('/weather/', { params: { latitude: 19.076, longitude: 72.877, limit: 23 }, headers: token ? { Authorization: 'Bearer ' + token } : {} })
+        const res = await api.get('/weather/', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers: token ? { Authorization: 'Bearer ' + token } : {} })
         const items = [...(res.data.items||[])].sort((a:any,b:any) => new Date(a.observation_time).getTime() - new Date(b.observation_time).getTime())
         setDates(items.map((r:any) => new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})))
         setSst(items.map((r:any) => r.temperature))
@@ -29,7 +29,7 @@ export function SstChart() {
   const option = {
     backgroundColor: 'transparent',
     textStyle: { color: '#94a3b8' },
-    title: { text: loading ? 'SST 15 Aug - 06 Sep (loading legit)...' : 'SST 15 Aug - 06 Sep legit Copernicus+Open-Meteo (Mumbai)', textStyle: { color: '#64748b', fontSize: 11 } },
+    title: { text: loading ? 'SST past 7 days (loading)...' : 'SST past 7 days to today (Mumbai)', textStyle: { color: '#64748b', fontSize: 11 } },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 9 } },
     yAxis: { type: 'value', name: 'SST C', min: 26 },
@@ -46,13 +46,13 @@ export function ChlorophyllChart() {
       try {
         const token = localStorage.getItem('orca_token')
         const headers: any = token ? { Authorization: 'Bearer ' + token } : {}
-        const res = await api.get('/ocean/history', { params: { latitude: 19.076, longitude: 72.877, limit: 23 }, headers })
+        const res = await api.get('/ocean/history', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers })
         const items = res.data.items || []
         const labels = items.map((r:any) => new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}))
         const vals = items.map((r:any) => r.chlorophyll ?? 0.14)
         setDates(labels); setChl(vals)
       } catch {
-        setDates(['15 Aug','06 Sep']); setChl([0.14,0.14])
+        setDates(['01 Sep','07 Sep']); setChl([0.14,0.14])
       }
     }
     fetchChl()
@@ -60,7 +60,7 @@ export function ChlorophyllChart() {
   const option = {
     backgroundColor: 'transparent',
     textStyle: { color: '#94a3b8' },
-    title: { text: 'Chlorophyll 15 Aug-06 Sep legit Copernicus 0.14 mg/m3 (Mumbai)', textStyle: { color: '#64748b', fontSize: 10 } },
+    title: { text: 'Chlorophyll past 7 days to today (Mumbai)', textStyle: { color: '#64748b', fontSize: 10 } },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 9 } },
     yAxis: { type: 'value', name: 'Chl mg/m3' },

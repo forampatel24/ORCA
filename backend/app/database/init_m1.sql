@@ -255,6 +255,23 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- vessel tracks (Global Fishing Watch v3 events, Maharashtra/Mumbai bbox slice)
+CREATE TABLE IF NOT EXISTS vessel_tracks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_id UUID REFERENCES data_sources(id),
+    observation_time TIMESTAMPTZ,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    location GEOGRAPHY(POINT, 4326),
+    vessel_id VARCHAR(255),
+    vessel_name VARCHAR(255),
+    event_type VARCHAR(50),
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_vessel_location ON vessel_tracks USING GIST (location);
+CREATE INDEX IF NOT EXISTS idx_vessel_time ON vessel_tracks (observation_time);
+
 -- seed data_sources
 INSERT INTO data_sources (name, provider, source_type, category, format, status) VALUES
 ('INCOIS PFZ', 'INCOIS', 'pfz', 'marine', 'GeoJSON', 'AVAILABLE'),
@@ -262,6 +279,7 @@ INSERT INTO data_sources (name, provider, source_type, category, format, status)
 ('IMD Weather', 'IMD', 'weather', 'meteorological', 'JSON', 'AVAILABLE'),
 ('IMD Cyclone', 'IMD', 'cyclone', 'hazard', 'JSON', 'AVAILABLE'),
 ('WDPA Marine Protected Areas', 'Protected Planet', 'protected_area', 'geospatial', 'Shapefile', 'AVAILABLE'),
-('Marine Regions EEZ', 'Marine Regions', 'eez', 'geospatial', 'Shapefile', 'AVAILABLE')
+('Marine Regions EEZ', 'Marine Regions', 'eez', 'geospatial', 'Shapefile', 'AVAILABLE'),
+('GFW Fishing Events', 'Global Fishing Watch', 'vessel_events', 'vessel', 'JSON', 'AVAILABLE')
 ON CONFLICT DO NOTHING;
 

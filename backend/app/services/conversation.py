@@ -1,5 +1,6 @@
 """Conversation service - docs 02 CONV multi-turn + reference resolution."""
 import psycopg, uuid, re
+from app.database.connection import psycopg_conninfo
 from typing import Dict, Any, Optional
 
 def save_message(conversation_id: str, user_id: str, role: str, content: str, language: str = "en"):
@@ -12,7 +13,7 @@ def save_message(conversation_id: str, user_id: str, role: str, content: str, la
     except:
         cid = str(uuid.uuid4())
         conversation_id = cid
-    conn = psycopg.connect("host=localhost dbname=orca_db user=orca_app password=orca_app_pass")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     # ensure conversation exists
     try:
@@ -34,7 +35,7 @@ def get_history(conversation_id: str, limit: int = 5) -> list:
     except:
         return []
     try:
-        conn = psycopg.connect("host=localhost dbname=orca_db user=orca_app password=orca_app_pass")
+        conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         cur.execute("SELECT role, content FROM messages WHERE conversation_id=%s ORDER BY created_at DESC LIMIT %s", (conversation_id, limit))
         rows = cur.fetchall()

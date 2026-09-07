@@ -20,7 +20,7 @@ class WeatherRepository:
                 ST_Distance(location, ST_GeographyFromText(:point)) / 1000.0 AS distance_km,
                 metadata
             FROM weather_observations
-            ORDER BY location <-> ST_GeographyFromText(:point), forecast_time ASC
+            ORDER BY location <-> ST_GeographyFromText(:point), forecast_time DESC
             LIMIT :limit
         """)
         point_wkt = f"POINT({longitude} {latitude})"

@@ -1,5 +1,6 @@
 """Ocean tools - Mumbai-only authentic, no hardcoded mocks."""
 import psycopg
+from app.database.connection import psycopg_conninfo
 import structlog
 from app.config.mumbai import MUMBAI_BBOX
 log = structlog.get_logger()
@@ -8,7 +9,7 @@ def get_ocean(lat: float, lon: float):
     """Authentic Mumbai ocean observations from DB filtered to Mumbai bbox. No mock fallback."""
     from app.config.mumbai import MUMBAI_BBOX
     try:
-        conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+        conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         # Mumbai bbox only - not global
         cur.execute("""

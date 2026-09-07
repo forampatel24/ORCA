@@ -10,6 +10,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Drop dead tokens: backend returns 403 on bad signature and 404
+// "User not found" when the token belongs to another database.
+// Next send() re-logs in automatically via ensureLogin.
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const s = err.response?.status
+    const detail = err.response?.data?.detail
+    if (s === 401 || s === 403 || (s === 404 && detail === 'User not found')) {
+      localStorage.removeItem('orca_token')
+    }
+    return Promise.reject(err)
+  }
+)
+
 export async function login(email: string, password: string) {
   const form = new URLSearchParams()
   form.append('username', email)

@@ -2,21 +2,22 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 import uuid
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db
 from app.database.repositories.weather_repo import weather_repo
 from app.schemas.weather import WeatherResponse
 
 router = APIRouter()
 
+
 @router.get("/", response_model=WeatherResponse)
 async def get_weather(
     latitude: float,
     longitude: float,
-    limit: int = 24,
+    limit: int = 7,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
 ):
-    results = weather_repo.get_weather(db, latitude, longitude, limit)
+    # Public read: charts/map need data before login. Latest-N chronological.
+    results = list(reversed(weather_repo.get_weather(db, latitude, longitude, limit)))
     items = []
     for r in results:
         items.append({

@@ -14,3 +14,27 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def psycopg_conninfo() -> str:
+    """psycopg conninfo derived from DATABASE_URL so host/port follow env.
+
+    Team default is localhost:5432 (docker). Machines with a native postgres
+    on 5432 use the override mapping localhost:5433 (see docker-compose.override.yml).
+    """
+    import os
+    from urllib.parse import urlparse
+
+    url = os.getenv("DATABASE_URL", "") or getattr(settings, "database_url", "")
+    if url.startswith("postgresql"):
+        url = url.replace("postgresql+psycopg://", "postgresql://")
+        try:
+            p = urlparse(url)
+            return (
+                f"host={p.hostname or 'localhost'} port={p.port or 5432} "
+                f"dbname={(p.path or '/orca_db').lstrip('/')} "
+                f"user={p.username or 'postgres'} password={p.password or 'postgres'}"
+            )
+        except Exception:
+            pass
+    return "host=localhost dbname=orca_db user=postgres password=postgres"

@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 import httpx
 import structlog
+from app.database.connection import psycopg_conninfo
 from app.services.ingestion.base import BaseConnector
 from app.config.mumbai import MUMBAI_BBOX, INCOIS_PFZ_WMS, bbox_str
 
@@ -84,6 +85,27 @@ def parse_sectext(home_html: str, detail_html: str) -> Dict[str, Any]:
         })
     return {"forecast": forecast, "valid_upto": valid_upto, "rows": rows}
 
+async def _point_sst(client: "httpx.AsyncClient", lat: float, lon: float):
+    """Actual SST at this exact coordinate from Open-Meteo Marine (current).
+
+    Returns (sst, sst_time) or (None, None). Each PFZ point gets its own
+    measured value - never a single station value copied across points.
+    """
+    try:
+        r = await client.get("https://marine-api.open-meteo.com/v1/marine", params={
+            "latitude": lat, "longitude": lon,
+            "current": "sea_surface_temperature", "timezone": "UTC", "forecast_days": 1,
+        })
+        if r.status_code == 200:
+            cur = (r.json().get("current") or {})
+            sst = cur.get("sea_surface_temperature")
+            if sst is not None:
+                return round(float(sst), 2), cur.get("time")
+    except Exception as e:
+        log.warning("pfz_point_sst_failed", lat=lat, lon=lon, error=str(e))
+    return None, None
+
+
 class PFZConnector(BaseConnector):
     def __init__(self, source_id: str):
         super().__init__(source_id, "pfz", "INCOIS")
@@ -131,7 +153,14 @@ class PFZConnector(BaseConnector):
                     obs_iso = (fc.isoformat() if fc else datetime.now(timezone.utc).isoformat())
                     out = []
                     sector_total = len(rows)
-                    for row in rows:
+                    # Actual per-point SST: one live Marine query per PFZ coordinate,
+                    # run concurrently. No station value is ever copied across points.
+                    import asyncio as _aio
+                    async def _enrich(row):
+                        sst, stime = await _point_sst(client, row["latitude"], row["longitude"])
+                        return sst, stime
+                    sst_vals = await _aio.gather(*[_enrich(row) for row in rows])
+                    for row, (sst, stime) in zip(rows, sst_vals):
                         in_mumbai = (use_bbox[1] <= row["latitude"] <= use_bbox[3]
                                      and use_bbox[0] <= row["longitude"] <= use_bbox[2])
                         if not include_outside_bbox and not in_mumbai:
@@ -158,6 +187,12 @@ class PFZConnector(BaseConnector):
                                 "sector_total": sector_total,
                                 "forecast_date": fc.strftime("%d %b %Y") if fc else None,
                                 "valid_upto": vu.strftime("%d %b %Y") if vu else None,
+                                "sst": sst,
+                                "sst_source": "open-meteo_marine_at_point" if sst is not None else None,
+                                "sst_time": stime,
+                                "sst_note": "measured at this PFZ coordinate, not a station copy" if sst is not None else "point query failed",
+                                "chlorophyll": None,
+                                "chlorophyll_note": "INCOIS text has no chl column; live chl needs Copernicus/MOSDAC",
                             },
                         })
                     if out:
@@ -175,7 +210,7 @@ class PFZConnector(BaseConnector):
         # No global - only Mumbai bbox points are authoritative
         try:
             import psycopg
-            conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+            conn = psycopg.connect(psycopg_conninfo())
             cur = conn.cursor()
             cur.execute("""
                 SELECT latitude, longitude, observation_time, metadata

@@ -1,5 +1,6 @@
 """Weather tools - Mumbai-only authentic, no hardcoded mocks."""
 import psycopg, structlog
+from app.database.connection import psycopg_conninfo
 from typing import Dict, Any, Optional
 from app.config.mumbai import MUMBAI_BBOX
 log = structlog.get_logger()
@@ -7,7 +8,7 @@ log = structlog.get_logger()
 def get_weather(lat: float, lon: float, time_filter: Optional[str] = None) -> Dict[str, Any]:
     """Mumbai-only weather from DB filtered to bbox. No mock fallback."""
     try:
-        conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+        conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         cur.execute("""
             SELECT wind_speed, temperature, rainfall, pressure, observation_time, forecast_time
@@ -35,7 +36,7 @@ def get_hazards(lat: float, lon: float, radius_km: float = 100) -> list:
     import psycopg
     from app.config.mumbai import MUMBAI_BBOX
     # Hazards filtered to Mumbai bbox + radius from point (still Mumbai-only)
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("""
         SELECT hazard_type, severity, description, ST_Distance(geometry::geography, ST_GeographyFromText(%s))/1000 as d

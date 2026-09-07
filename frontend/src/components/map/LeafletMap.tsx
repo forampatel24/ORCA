@@ -37,6 +37,7 @@ export default function LeafletMap() {
   const [hazards, setHazards] = useState<any[]>([])
   const [routeLine, setRouteLine] = useState<[number, number][]>([])
   const [grid, setGrid] = useState<any[]>([]) // real Copernicus grid when available
+  const [vessels, setVessels] = useState<any[]>([]) // live GFW v3 fishing events
 
   useEffect(() => {
     fetch("/india_states.geojson")
@@ -47,10 +48,24 @@ export default function LeafletMap() {
     fetch(`/api/v1/geospatial/eez?bbox=${bbox}`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setEez).catch(() => {})
     fetch(`/api/v1/geospatial/mpa?bbox=${bbox}`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setMumbaiMpa).catch(() => {})
     fetch(`/api/v1/geospatial/coastline?bbox=${bbox}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => { if (d.features?.length) setCoast(d) }).catch(() => {})
-    fetch(`/api/v1/geospatial/pfz?bbox=${bbox}`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setPfzGeo).catch(() => {})
-    import("../../api/client").then(({ getNearestPFZ }) => {
-      getNearestPFZ(19.076, 72.877, 80).then((d: any) => { if (d.items?.length) useMapStore.getState().setPfz(d.items) }).catch(() => {})
-    })
+    fetch(`/api/v1/geospatial/pfz?bbox=${bbox}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => {
+      setPfzGeo(d)
+      // Map PFZ layer = ALL live INCOIS zones in bbox (21), not just nearest 5
+      const feats = d.features || []
+      if (feats.length) {
+        useMapStore.getState().setPfz(feats.map((f: any) => ({
+          id: f.properties?.id || `${f.properties?.latitude},${f.properties?.longitude}`,
+          latitude: f.properties?.latitude ?? f.geometry?.coordinates?.[1],
+          longitude: f.properties?.longitude ?? f.geometry?.coordinates?.[0],
+          metadata: f.properties?.metadata || {},
+          observation_time: f.properties?.observation_time,
+          distance_km: null,
+          source: "incois_pfz_live_21",
+        })))
+      }
+    }).catch(() => {})
+    // NOTE: no nearest-5 overwrite here - the PFZ layer shows ALL live zones
+    // from /geospatial/pfz above. Chat sync only moves center/selection.
   }, [])
 
   useEffect(() => {
@@ -66,6 +81,10 @@ export default function LeafletMap() {
     }
     if (["cyclone", "lightning", "alerts"].includes(activeSub)) {
       api.get("/hazards/", { params: { latitude: lat, longitude: lon, radius: 100 }, headers }).then((r) => setHazards(r.data.items || [])).catch(() => setHazards([]))
+    }
+    if (activeSub === "vessel") {
+      // Live GFW v3 fishing events - public endpoint, no login needed
+      fetch(`/api/v1/vessels?bbox=71.8,15.5,74.5,20.5&limit=50`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setVessels(d.items || [])).catch(() => setVessels([]))
     }
     if (activeSub === "route") setRouteLine([[19.076, 72.877], [19.03, 72.8], [18.98, 72.75]])
   }, [activeSub])
@@ -105,7 +124,7 @@ export default function LeafletMap() {
           // @ts-ignore
           <Marker key={p.id + "-halo"} position={[p.latitude, p.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:38px;height:38px;background:${(p.pfz_score ?? 0.72) > 0.75 ? "#22c55e" : "#0ea5e9"}22;border:1.4px dashed ${(p.pfz_score ?? 0.72) > 0.75 ? "#22c55e" : "#0ea5e9"};border-radius:50%"></div>`, iconSize: [38, 38] as any, iconAnchor: [19, 19] as any }) as any} />,
           // @ts-ignore
-          <Marker key={p.id} position={[p.latitude, p.longitude] as any} icon={pfzIcon(false) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b style={{ color: "#22c55e" }}>{p.metadata?.sector || p.sector || "PFZ"}</b><br/><small>SST {p.metadata?.sst ?? "-"}°C • Chl {p.metadata?.chl ?? "-"} mg/m³</small><br/><small>{p.distance_km?.toFixed(1)} km • {p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</small><br/><small>{p.observation_time?.slice(0, 10) || "15 Aug 2026"}</small></div></Popup></Marker>,
+          <Marker key={p.id} position={[p.latitude, p.longitude] as any} icon={pfzIcon(false) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b style={{ color: "#22c55e" }}>{p.landing_centre || p.metadata?.landing_centre || p.metadata?.sector || p.sector || "PFZ"}</b><br/><small>SST {p.metadata?.sst ?? "-"}°C • Chl {p.metadata?.chl ?? "-"} mg/m³</small><br/><small>{p.distance_km?.toFixed(1)} km • {p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</small><br/><small>{p.observation_time?.slice(0, 10) || "15 Aug 2026"}</small></div></Popup></Marker>,
         ]).flat()}
         {shouldShowPfz && pfz.length === 0 && pfzGeo?.features?.length ? pfzGeo.features.slice(0, 30).map((f: any, i: number) => { const c = f.geometry.coordinates; return ( // @ts-ignore
           <Marker key={f.properties.id || i} position={[c[1], c[0]] as any} icon={pfzIcon(false) as any}><Popup><div style={{ color: "#0f172a" }}><b>PFZ {f.properties.latitude?.toFixed(2)}</b><br/><small>{f.properties.observation_time?.slice(0, 10)}</small></div></Popup></Marker>) }) : null}
@@ -169,9 +188,10 @@ export default function LeafletMap() {
         {shouldShowMpa && mumbaiMpa && mumbaiMpa.features?.length > 0 && ( // @ts-ignore
           <RLGeoJSON data={mumbaiMpa} style={{ color: "#f43f5e", weight: 2, dashArray: "4 4", fillColor: "#f43f5e", fillOpacity: 0.15 } as any} onEachFeature={(f: any, l: any) => l.bindPopup(`<b>${f.properties?.name}</b><br/>${f.properties?.authority || ""}`)} />
         )}
-        {activeSub === "vessel" && ( // @ts-ignore
-          <Marker position={[19.03, 72.55] as any} icon={L.divIcon({ className: "", html: `<div style="width:16px;height:16px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 6px #000;position:relative"><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:600">VESSEL</div></div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any}><Popup>Vessel • 19.03°N, 72.55°E • Offshore Mumbai (water)</Popup></Marker>
-        )}
+        {activeSub === "vessel" && vessels.map((v: any) => ( // @ts-ignore
+          <Marker key={v.id} position={[v.latitude, v.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:16px;height:16px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 6px #000;position:relative"><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:600">${(v.vessel_name || "VESSEL").slice(0, 18)}</div></div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b>{v.vessel_name || "Unknown vessel"}</b><br/><small>{v.event_type || "fishing"} • {v.observation_time?.slice(0, 10)}</small><br/><small>{v.latitude?.toFixed(3)}°N, {v.longitude?.toFixed(3)}°E</small><br/><small>Source: GFW v3 events</small></div></Popup></Marker>
+        ))}
+        {activeSub === "vessel" && vessels.length === 0 && <EmptyOverlay title="Vessels — no GFW events in window" body="vessel_tracks 0 rows for this bbox. Re-run GFW backfill." />}
         {activeSub === "route" && routeLine.length > 1 && ( // @ts-ignore
           <Polyline positions={routeLine as any} pathOptions={{ color: "#22c55e", weight: 4, dashArray: "8 8", opacity: 0.9 } as any} />
         )}

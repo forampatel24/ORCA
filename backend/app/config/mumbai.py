@@ -42,7 +42,7 @@ WDPA_API = os.getenv("WDPA_API", "https://api.protectedplanet.net/v3/protected_a
 GEBCO_WCS = os.getenv("GEBCO_WCS", "https://www.gebco.net/data-products/bathymetry")
 COPERNICUS_DATASET_PHYS = os.getenv("COPERNICUS_DATASET_PHYS", "cmems_mod_glo_phy_my_0.083deg_P1D-m")
 COPERNICUS_DATASET_WAVE = os.getenv("COPERNICUS_DATASET_WAVE", "cmems_mod_glo_wav_my_0.2deg_P3H")
-GFW_API = os.getenv("GFW_API", "https://api.globalfishingwatch.org/v2")
+GFW_API = os.getenv("GFW_API", "https://gateway.api.globalfishingwatch.org/v3")
 IMD_API = os.getenv("IMD_API", "https://city.imd.gov.in/api")
 OPEN_METEO_API = os.getenv("OPEN_METEO_API", "https://api.open-meteo.com/v1/forecast")
 

@@ -7,8 +7,8 @@ def _mumbai_baseline(variable: str, fallback: float) -> float:
     """Authentic 30-day Mumbai bbox average from ocean_observations, not hardcoded."""
     from app.config.mumbai import MUMBAI_BBOX
     try:
-        import psycopg
-        conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+        from app.database.connection import psycopg_conninfo
+        conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         col = "sst" if variable == "sst" else "chlorophyll"
         cur.execute(f"""

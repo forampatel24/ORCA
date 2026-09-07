@@ -1,28 +1,25 @@
 ﻿from fastapi import APIRouter, Depends, Query
-from app.api.deps import get_current_user
-import psycopg, os
-from urllib.parse import urlparse
+from app.database.connection import psycopg_conninfo
+import psycopg
 
 router = APIRouter()
 
 def _conn():
-    url=os.getenv("DATABASE_URL","postgresql+psycopg://postgres:postgres@localhost:5432/orca_db")
-    if url.startswith("postgresql+psycopg://"):
-        url=url.replace("postgresql+psycopg://","postgresql://")
-    p=urlparse(url)
-    return psycopg.connect(f"host={p.hostname or 'localhost'} port={p.port or 5432} dbname={(p.path or '/orca_db').lstrip('/')} user={p.username or 'postgres'} password={p.password or 'postgres'}")
+    return psycopg.connect(psycopg_conninfo())
 
 @router.get("/history")
-async def ocean_history(latitude: float, longitude: float, limit: int = 23, current_user = Depends(get_current_user)):
+async def ocean_history(latitude: float, longitude: float, limit: int = 7):
+    # Public read: charts/map need data before login. Latest-N chronological
+    # (DESC in SQL, reversed) so limit=7 always means the past week to today.
     conn=_conn()
     cur=conn.cursor()
-    cur.execute("SELECT sst, chlorophyll, wave_height, observation_time FROM ocean_observations WHERE ST_Within(location::geometry, ST_MakeEnvelope(72.2,18.5,73.2,19.5,4326)) ORDER BY observation_time ASC LIMIT %s", (limit,))
-    rows=cur.fetchall()
+    cur.execute("SELECT sst, chlorophyll, wave_height, observation_time FROM ocean_observations WHERE ST_Within(location::geometry, ST_MakeEnvelope(72.2,18.5,73.2,19.5,4326)) ORDER BY observation_time DESC LIMIT %s", (limit,))
+    rows=list(reversed(cur.fetchall()))
     conn.close()
     return {"items": [{"sst": r[0], "chlorophyll": r[1], "wave_height": r[2], "observation_time": r[3].isoformat() if r[3] else None} for r in rows]}
 
 @router.get("/grid")
-async def ocean_grid(bbox: str = Query(default="72.2,18.5,73.2,19.5"), current_user = Depends(get_current_user)):
+async def ocean_grid(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
     """Real Copernicus gridded per-pixel values — thetao/sst, so, uo, vo, current_speed, chlorophyll. Water only (land NaN masked)."""
     try:
         min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))

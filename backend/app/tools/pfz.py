@@ -1,6 +1,7 @@
 """Tools - PFZ deterministic Mumbai-only - no hardcoded, PostGIS bbox filtered."""
 from typing import List, Dict, Any
 import psycopg, structlog
+from app.database.connection import psycopg_conninfo
 from app.config.mumbai import MUMBAI_BBOX
 log = structlog.get_logger()
 
@@ -11,7 +12,7 @@ def get_nearest_pfz(lat: float, lon: float, radius_km: float = 50) -> List[Dict[
         log.warning("pfz_mumbai_only_clamped", lat=lat, lon=lon, bbox=MUMBAI_BBOX)
         lat, lon = 19.076, 72.877
     try:
-        conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+        conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         cur.execute("""
             SELECT id::text, latitude, longitude, metadata, observation_time,
@@ -29,7 +30,7 @@ def get_nearest_pfz(lat: float, lon: float, radius_km: float = 50) -> List[Dict[
         return []
 
 def get_pfz_all(limit: int = 10) -> List[Dict[str, Any]]:
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("SELECT id::text, latitude, longitude, metadata FROM pfz_observations WHERE latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s LIMIT %s", (MUMBAI_BBOX[1], MUMBAI_BBOX[3], MUMBAI_BBOX[0], MUMBAI_BBOX[2], limit))
     rows = cur.fetchall()

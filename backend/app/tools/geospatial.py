@@ -1,5 +1,6 @@
 """Geospatial tools - Mumbai-only authentic, PostGIS bbox filtered, no hardcoded."""
 import psycopg, structlog
+from app.database.connection import psycopg_conninfo
 from typing import Dict, Any
 from app.config.mumbai import MUMBAI_BBOX
 log = structlog.get_logger()
@@ -10,7 +11,7 @@ def check_geofence(lat: float, lon: float) -> Dict[str, Any]:
     if not point_within_mumbai(lat, lon):
         log.warning("geofence_mumbai_clamped", lat=lat, lon=lon, bbox=MUMBAI_BBOX)
         lat, lon = 19.076, 72.877
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     # Only check geofences/protected that intersect Mumbai bbox (Mumbai EEZ/Malvan MPA/Mumbai coastline)
     cur.execute("""
@@ -46,7 +47,7 @@ def check_geofence(lat: float, lon: float) -> Dict[str, Any]:
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Deterministic ST_Distance geography - works for Mumbai."""
-    conn = psycopg.connect("host=localhost dbname=orca_db user=postgres password=postgres")
+    conn = psycopg.connect(psycopg_conninfo())
     cur = conn.cursor()
     cur.execute("SELECT ST_Distance(ST_GeographyFromText(%s), ST_GeographyFromText(%s))/1000", (f"POINT({lon1} {lat1})", f"POINT({lon2} {lat2})"))
     d = cur.fetchone()[0]

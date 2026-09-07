@@ -50,7 +50,7 @@ function InfoCard({ activeSub }: { activeSub: string | null }) {
     mpa: { title: "MARINE PROTECTED AREAS", lines: ["0 MPA in Mumbai bbox 72.2,18.5,73.2,19.5", "Thane Creek outside bbox", "WDPA + protected_areas"], source: "WDPA / protected_areas" },
     restricted: { title: "RESTRICTED ZONES", lines: ["1 coastline geofence only", "No red hatched polygons in bbox", "Natural Earth 10m"], source: "PostGIS geofences" },
     alerts: { title: "SAFETY ALERTS", lines: ["All clear — 0 active hazards", "High-wave / rough-sea / storm none", "Safety has visual priority over PFZ"], source: "marine_hazards" },
-    vessel: { title: "VESSEL", lines: ["User vessel 19.076°N, 72.877°E", "Mumbai coastal operating area", "Heading/course later"], source: "User location" },
+    vessel: { title: "VESSEL", lines: ["Live GFW v3 fishing events", "Orange markers • Hover for name/time", "Maharashtra bbox 31 Aug–07 Sep"], source: "GFW v3 events" },
     ports: { title: "PORTS", lines: ["Port markers pending", "Needs Natural Earth ports dataset", "Hover for name/info later"], source: "Natural Earth ports" },
     eez: { title: "EEZ", lines: ["Indian EEZ maritime boundary", "Blue dashed • 5 MarineRegions clipped", "Mumbai bbox offshore"], source: "MarineRegions WFS" },
     route: { title: "ROUTE", lines: ["Optimized route Mumbai→PFZ", "Green dashed • Shortest vs Safest later", "Accounts weather/waves/restricted"], source: "Route engine (stub)" },
@@ -140,11 +140,11 @@ function Dashboard() {
           {/* Charts — only show for fishing/marine context */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className="border border-slate-800 rounded p-3 bg-slate-900">
-              <div className="text-xs font-semibold mb-1">SST Trend (23 days 15 Aug–06 Sep)</div>
+              <div className="text-xs font-semibold mb-1">SST Trend (past 7 days to today)</div>
               <SstChart />
             </div>
             <div className="border border-slate-800 rounded p-3 bg-slate-900">
-              <div className="text-xs font-semibold mb-1">Chlorophyll (23 days)</div>
+              <div className="text-xs font-semibold mb-1">Chlorophyll (past 7 days)</div>
               <ChlorophyllChart />
             </div>
           </div>

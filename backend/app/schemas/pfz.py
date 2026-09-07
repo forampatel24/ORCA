@@ -7,6 +7,7 @@ class PFZItem(BaseModel):
     latitude: float
     longitude: float
     sector: Optional[str] = None
+    landing_centre: Optional[str] = None
     sst: Optional[float] = None
     chlorophyll: Optional[float] = None
     distance_km: Optional[float] = None

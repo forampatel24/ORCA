@@ -65,7 +65,7 @@ const SOURCE_LABEL: Record<string, string> = {
   mpa: "Protected Areas (0 in Mumbai bbox)",
   restricted: "Geofences (1 coastline)",
   alerts: "Active hazards (0)",
-  vessel: "User location (Mumbai 19.076,72.877)",
+  vessel: "GFW v3 fishing events (live)",
   ports: "Port dataset (pending)",
   eez: "MarineRegions EEZ (5 boundaries)",
   route: "Route engine (stub)",

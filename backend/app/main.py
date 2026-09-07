@@ -25,7 +25,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-from app.api.routes import health, chat, auth, pfz, weather, hazards, risk, routes, geospatial, ocean
+from app.api.routes import health, chat, auth, pfz, weather, hazards, risk, routes, geospatial, ocean, vessels
 from app.core.middleware import RequestIDMiddleware
 
 log = structlog.get_logger()
@@ -54,6 +54,7 @@ app.include_router(risk.router, prefix="/api/v1/risk", tags=["risk"])
 app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
 app.include_router(ocean.router, prefix="/api/v1/ocean", tags=["ocean"])
 app.include_router(geospatial.router, prefix="/api/v1/geospatial", tags=["geospatial"])
+app.include_router(vessels.router, prefix="/api/v1/vessels", tags=["vessels"])
 
 @app.get("/metrics")
 async def metrics():
