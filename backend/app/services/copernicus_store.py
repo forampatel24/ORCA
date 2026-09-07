@@ -121,7 +121,7 @@ def _load_waves():
     return _WAV_CACHE["ds"]
 
 
-def waves_cells(bbox, max_cells: int = 280):
+def waves_cells(bbox, max_cells: int = 180):
     """Wave field for the map - height + period + direction, latest time, land masked."""
     import numpy as _np
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -170,7 +170,7 @@ def waves_cells(bbox, max_cells: int = 280):
         return [], None
 
 
-def currents_cells(bbox, max_cells: int = 280):
+def currents_cells(bbox, max_cells: int = 180):
     """Currents vectors for the streamlines layer.
 
     Latest hour slice, strided to max_cells. Returns
@@ -232,7 +232,7 @@ def _load_sst():
     return _SST_CACHE["ds"]
 
 
-def grid_cells(kind: str, bbox, max_cells: int = 300):
+def grid_cells(kind: str, bbox, max_cells: int = 180):
     """Full spatial grid for map layers. kind: 'sst' | 'chl'.
 
     Latest time slice, strided to max_cells. Returns

@@ -27,18 +27,18 @@ def _grid_coords(bbox, nx=9, ny=9):
     return [(lat, lon) for lat in lats for lon in lons]
 
 
-async def wind_cells(bbox, nx=9, ny=9):
+async def wind_cells(bbox, nx=6, ny=6):
     now = datetime.now(timezone.utc)
     if _CACHE["cells"] is not None and _CACHE["bbox"] == bbox and _CACHE["t"] and (now - _CACHE["t"]).total_seconds() < TTL:
         return _CACHE["cells"], _CACHE["time"]
     coords = _grid_coords(bbox, nx=nx, ny=ny)
     # Fetch wind at each grid point in parallel, current hour only.
-    sem = asyncio.Semaphore(12)
+    sem = asyncio.Semaphore(8)
 
     async def one(lat, lon):
         async with sem:
             try:
-                async with httpx.AsyncClient(timeout=12) as c:
+                async with httpx.AsyncClient(timeout=20) as c:
                     r = await c.get("https://api.open-meteo.com/v1/forecast",
                                     params={"latitude": lat, "longitude": lon,
                                             "current": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",

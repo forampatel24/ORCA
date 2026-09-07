@@ -13,6 +13,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 })
 
+let _lastHistAt = 0
+let _lastWeatherAt = 0
+
 function VesselDraggable() {
   const { userPos, setUserPos } = useMapStore()
   if (!userPos) return null
@@ -29,6 +32,8 @@ function FlyTo({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
     const lon = center[0], lat = center[1]
+    // Don't interrupt a user drag/zoom gesture
+    if ((map as any).dragging && (map as any).dragging._draggable && (map as any).dragging._draggable._moving) return
     // Preserve the zoom the user has set - never force zoom out to 5
     // when they drag outside Mumbai. Only nudge zoom if wildly off.
     const cur = map.getZoom()
@@ -119,8 +124,15 @@ export default function LeafletMap() {
     const headers: any = token ? { Authorization: "Bearer " + token } : {}
     const lat = 19.076, lon = 72.877
     if (["sst", "chl", "waves", "sea", "wind", "weather", "currents"].includes(activeSub)) {
-      api.get("/ocean/history", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setOceanHistory(r.data.items || [])).catch(() => {})
-      api.get("/weather/", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setWeather(r.data.items || [])).catch(() => {})
+      const now = Date.now()
+      if (now - _lastHistAt > 30000) {
+        _lastHistAt = now
+        api.get("/ocean/history", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setOceanHistory(r.data.items || [])).catch(() => {})
+      }
+      if (now - _lastWeatherAt > 30000) {
+        _lastWeatherAt = now
+        api.get("/weather/", { params: { latitude: lat, longitude: lon, limit: 7 }, headers }).then((r) => setWeather(r.data.items || [])).catch(() => {})
+      }
       // Try real gridded Copernicus endpoint if backend exposes it
       api.get("/ocean/grid", { params: { bbox: "72.2,18.5,73.2,19.5" }, headers }).then((r) => setGrid(r.data.points || r.data.items || [])).catch(() => setGrid([]))
     }
@@ -186,7 +198,7 @@ export default function LeafletMap() {
   const pfzIcon = (sel: boolean) =>
     L.divIcon({ className: "", html: `<div style="width:${sel ? 14 : 12}px;height:${sel ? 14 : 12}px;background:${sel ? "#f59e0b" : "#22c55e"};border-radius:50%;border:2px solid white;box-shadow:0 0 5px #000"></div>`, iconSize: [12, 12] as any, iconAnchor: [6, 6] as any })
 
-  const shouldShowPfz = activeSub === "pfz" || (!activeSub && layers.pfz)
+  const shouldShowPfz = true // always visible per requirement - PFZ is the core fishing layer
   const shouldShowEez = activeSub === "eez" || (!activeSub && layers.eez)
   const shouldShowMpa = activeSub === "mpa" || activeSub === "restricted" || (!activeSub && layers.mpa)
 
@@ -211,7 +223,7 @@ export default function LeafletMap() {
   return (
     <div className="relative h-full w-full">
       {/* @ts-ignore */}
-      <MapContainer center={[19.2, 72.85] as any} zoom={9} style={{ height: "100%", minHeight: 400, borderRadius: 8 } as any} className="border border-slate-700">
+      <MapContainer center={[19.2, 72.85] as any} zoom={9} style={{ height: "100%", minHeight: 400, borderRadius: 8 } as any} className="border border-slate-700" preferCanvas>
         {/* @ts-ignore */}
         <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {states && ( // @ts-ignore
