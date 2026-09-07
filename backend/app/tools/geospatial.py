@@ -5,7 +5,45 @@ from typing import Dict, Any
 from app.config.mumbai import MUMBAI_BBOX
 log = structlog.get_logger()
 
+_LAND_CACHE = None
+
+def _is_on_land(lat: float, lon: float) -> bool | None:
+    """Land vs sea using Maharashtra state polygon from frontend GeoJSON (no mock bbox)."""
+    global _LAND_CACHE
+    try:
+        if _LAND_CACHE is None:
+            from pathlib import Path as _P
+            import json as _j
+            candidates = [
+                _P(__file__).resolve().parents[3] / "frontend" / "public" / "india_states.geojson",
+                _P(r"D:\Foram_TP\ORCA\frontend\public\india_states.geojson"),
+            ]
+            for fp in candidates:
+                if fp.exists():
+                    gj = _j.loads(fp.read_text())
+                    # find Maharashtra feature (NAME_1)
+                    feat = next((f for f in gj.get("features", []) if (f.get("properties", {}).get("NAME_1") == "Maharashtra")), None)
+                    if feat:
+                        from shapely.geometry import shape as _shape, Point as _Pt
+                        _LAND_CACHE = (_shape(feat["geometry"]),)
+                    break
+            if _LAND_CACHE is None:
+                return None
+        geom, = _LAND_CACHE
+        from shapely.geometry import Point as _Pt
+        return geom.contains(_Pt(lon, lat))
+    except Exception:
+        return None
+
 def check_geofence(lat: float, lon: float) -> Dict[str, Any]:
+    """Mumbai-only geofence check - only boundaries intersecting Mumbai bbox."""
+    from app.config.mumbai import point_within_mumbai
+    on_land = _is_on_land(lat, lon)
+    # Keep original lat/lon for land reporting - do NOT clamp to Mumbai when on land elsewhere in Maharashtra
+    orig_lat, orig_lon = lat, lon
+    if not point_within_mumbai(lat, lon) and on_land is not True:
+        log.warning("geofence_mumbai_clamped", lat=lat, lon=lon, bbox=MUMBAI_BBOX)
+        lat, lon = 19.076, 72.877
     """Mumbai-only geofence check - only boundaries intersecting Mumbai bbox."""
     from app.config.mumbai import point_within_mumbai
     if not point_within_mumbai(lat, lon):
@@ -40,7 +78,8 @@ def check_geofence(lat: float, lon: float) -> Dict[str, Any]:
         "inside_protected": p[0] if p else None,
         "nearest_geofence": nearest[0] if nearest else None,
         "distance_to_nearest_km": float(nearest[1]) if nearest else None,
-        "check_point": {"lat": lat, "lon": lon},
+        "check_point": {"lat": orig_lat, "lon": orig_lon},
+        "on_land": on_land,
         "bbox": MUMBAI_BBOX,
         "source": "mumbai_bbox_geofences"
     }

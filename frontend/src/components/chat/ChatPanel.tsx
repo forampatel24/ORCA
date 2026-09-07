@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useChatStore } from '../../stores/chatStore'
 import { useMapStore } from '../../stores/mapStore'
+import { useVizStore } from '../../stores/vizStore'
 import { chat, getNearestPFZ, login } from '../../api/client'
+import { api } from '../../api/client'
 
 export default function ChatPanel() {
   const [input, setInput] = useState('')
   const { messages, addMessage, loading, setLoading } = useChatStore()
   const { setCenter, setSelected } = useMapStore()
+  const { setActiveSub } = useVizStore()
 
   async function ensureLogin() {
     if (!localStorage.getItem('orca_token')) {
@@ -41,6 +44,41 @@ export default function ChatPanel() {
           setCenter(data.center || [pfzData.items[0].longitude, pfzData.items[0].latitude])
         } else if (data.center) setCenter(data.center as any)
       } catch { if(data.center) setCenter(data.center as any) }
+      // route intent: if user asks for route, parse coords and show on map (redirect to visualization)
+      try {
+        const ql = userMsg.toLowerCase()
+        if (ql.includes("route") || (ql.includes(" from ") && ql.includes(" to "))) {
+          // extract lat,lon pairs like 19.07,72.87
+          const pairs = [...userMsg.matchAll(/(\d+\.\d+)\s*[, ]\s*(\d+\.\d+)/g)].map((m: any) => [parseFloat(m[1]), parseFloat(m[2])])
+          let a: any = null, b: any = null
+          if (pairs.length >= 2) { a = pairs[0]; b = pairs[1] }
+          else if (pairs.length === 1) {
+            const vp = (useMapStore.getState() as any).userPos
+            if (vp) { a = [vp[1], vp[0]]; b = pairs[0] as any }
+          }
+          if (a && b) {
+            const r = await api.post("/routes/calculate", null, { params: { start_lat: a[0], start_lon: a[1], end_lat: b[0], end_lon: b[1] } })
+            // store route line for LeafletMap via custom event + viz switch
+            const dist = r.data.routes?.[0]?.distance_km
+            ;(window as any).__orca_chat_route = [[a[0], a[1]], [b[0], b[1]]]
+            window.dispatchEvent(new CustomEvent("orca-chat-route", { detail: [[a[0], a[1]], [b[0], b[1]]] }))
+            setActiveSub("route" as any)
+            addMessage({ role: "assistant", content: `Route shown on map — ${a[0]},${a[1]} → ${b[0]},${b[1]} ${dist ? `(${dist} km)` : ""}. Green dashed line.` })
+          } else if (ql.includes("route")) {
+            // no coords - show safe route to nearest PFZ from current vessel
+            const vp = (useMapStore.getState() as any).userPos || [72.877, 19.076]
+            const lon2 = Array.isArray(vp) ? vp[0] : 72.877, lat2 = Array.isArray(vp) ? vp[1] : 19.076
+            const nr = await api.get("/geospatial/notify", { params: { latitude: lat2, longitude: lon2 } })
+            const pfz = nr.data.pfz_nearest
+            if (pfz) {
+              ;(window as any).__orca_chat_route = [[lat2, lon2], [pfz.latitude, pfz.longitude]]
+              window.dispatchEvent(new CustomEvent("orca-chat-route", { detail: [[lat2, lon2], [pfz.latitude, pfz.longitude]] }))
+              setActiveSub("route" as any)
+              addMessage({ role: "assistant", content: `Route to nearest PFZ ${pfz.landing_centre || ""} shown — green line to ${pfz.latitude.toFixed(3)},${pfz.longitude.toFixed(3)} (${pfz.distance_km.toFixed(1)} km).` })
+            }
+          }
+        }
+      } catch {}
     } catch (e: any) {
       addMessage({ role: 'assistant', content: `Error: ${e.response?.data?.detail || e.message}` })
     } finally {

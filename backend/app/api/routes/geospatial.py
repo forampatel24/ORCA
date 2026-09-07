@@ -90,6 +90,12 @@ async def geofence_notify(latitude: float, longitude: float, radius: float = Que
 
     # Build notifications - honest, only when condition holds
     notifs = []
+    # On-land check must come first - land is not "international waters"
+    if geo.get("on_land") is True:
+        notifs.append({"level": "info", "code": "ON_LAND",
+                       "message": "On land — not a maritime zone. Move to coast (west ~5-10 km) to get marine checks."})
+        # Do not emit outside-EEZ warning when on land
+        eez_inside = None
     if geo.get("inside_protected"):
         notifs.append({"level": "critical", "code": "INSIDE_MPA",
                        "message": f"Inside Marine Protected Area: {geo['inside_protected']} - entry restricted."})
@@ -106,20 +112,21 @@ async def geofence_notify(latitude: float, longitude: float, radius: float = Que
                 notifs.append({"level": lvl, "code": f"NEAR_{h['hazard_type'].upper()}",
                                "message": f"{h['hazard_type'].title()} hazard {h['distance_km']:.1f} km away: {h['title']} ({h['severity']})",
                                "distance_km": h["distance_km"], "hazard": h})
-    # EEZ boundary proximity (info, not critical unless outside and far)
-    if eez_inside is False:
-        notifs.append({"level": "warning", "code": "OUTSIDE_EEZ",
-                       "message": f"Outside EEZ — {eez_dist:.0f} km beyond boundary. International waters.",
-                       "distance_km": eez_dist})
-    elif eez_dist is not None and eez_inside is not False:
-        if eez_dist < 3:
-            notifs.append({"level": "warning", "code": "NEAR_EEZ_BOUNDARY",
-                           "message": f"Approaching EEZ boundary — {eez_dist:.1f} km away. Avoid crossing.",
+    # EEZ boundary proximity (info, not critical unless outside and far) - skip when on land
+    if geo.get("on_land") is not True:
+        if eez_inside is False:
+            notifs.append({"level": "warning", "code": "OUTSIDE_EEZ",
+                           "message": f"Outside EEZ — {eez_dist:.0f} km beyond boundary. International waters.",
                            "distance_km": eez_dist})
-        elif eez_dist < 10:
-            notifs.append({"level": "info", "code": "EEZ_PROXIMITY",
-                           "message": f"EEZ boundary {eez_dist:.0f} km away.",
-                           "distance_km": eez_dist})
+        elif eez_dist is not None and eez_inside is not False:
+            if eez_dist < 3:
+                notifs.append({"level": "warning", "code": "NEAR_EEZ_BOUNDARY",
+                               "message": f"Approaching EEZ boundary — {eez_dist:.1f} km away. Avoid crossing.",
+                               "distance_km": eez_dist})
+            elif eez_dist < 10:
+                notifs.append({"level": "info", "code": "EEZ_PROXIMITY",
+                               "message": f"EEZ boundary {eez_dist:.0f} km away.",
+                               "distance_km": eez_dist})
     # PFZ proximity suggestion - bearing + distance, always fresh
     suggestion = None
     if pfz_nearest and pfz_nearest["distance_km"] is not None:
@@ -145,6 +152,9 @@ async def geofence_notify(latitude: float, longitude: float, radius: float = Que
     elif not pfz_nearest:
         suggestion = "No PFZ in database - check PFZ layer."
 
+    if geo.get("on_land") is True and suggestion:
+        suggestion = "On land — " + suggestion
+
     status = "safe"
     if any(n["level"]=="critical" for n in notifs):
         status = "critical"
@@ -162,6 +172,7 @@ async def geofence_notify(latitude: float, longitude: float, radius: float = Que
 def _safe_route(lat: float, lon: float, eez_inside, eez_dist, hazards, geo):
     """Deterministic safe navigation path back to safety.
 
+    - On land: closest point on coastline -> line to sea.
     - Outside EEZ: closest point on EEZ boundary (ST_ClosestPoint) -> line to safety.
     - Inside hazard/MPA: step away from hazard centroid ~8 km on opposite bearing.
     Returns GeoJSON LineString or None when already safe.
@@ -171,6 +182,20 @@ def _safe_route(lat: float, lon: float, eez_inside, eez_dist, hazards, geo):
         conn = _psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
         pt = f"POINT({lon} {lat})"
+        # On land -> route to nearest coastline (sea)
+        if geo.get("on_land") is True:
+            cur.execute("""
+                SELECT ST_AsGeoJSON(ST_ClosestPoint(geometry, ST_GeomFromText(%s,4326)))::json,
+                       ST_Distance(geometry::geography, ST_GeographyFromText(%s))/1000.0
+                FROM geofences WHERE name ILIKE '%%coastline%%' ORDER BY geometry <-> ST_GeomFromText(%s,4326) LIMIT 1
+            """, (pt, pt, pt))
+            row = cur.fetchone()
+            conn.close()
+            if row and row[0]:
+                gj = row[0]
+                return {"type": "LineString", "coordinates": [[lon, lat], [gj["coordinates"][0], gj["coordinates"][1]]],
+                        "distance_km": float(row[1]) if row[1] else None, "target": "coastline", "instruction": f"On land — head {row[1]:.1f} km west to reach the coast."}
+            return None
         # Outside EEZ -> route to boundary
         if eez_inside is False:
             cur.execute("""
