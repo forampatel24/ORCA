@@ -1,12 +1,32 @@
 import json
 import os
+import structlog
+import time
+import asyncio
 from langchain_core.messages import HumanMessage
 from app.agents.orchestrator.state import OrcaState
 from app.agents.orchestrator.schemas import IntentInterpretation, TaskPlan
 
+log = structlog.get_logger()
+_RATE_LIMITED_UNTIL = 0  # set to now+3600 on first 429, then auto-retries after window
+_LAST_KEY = ""  # track key change to clear quota flag when user puts new key
+
 def get_llm():
     """Provider-aware LLM factory — auto-detects Groq (gsk_) / Gemini (AIza/AQ.) else OpenAI.
     Respects LLM_PROVIDER/LMM_MODEL from .env. No key -> None -> mock fallback."""
+    global _RATE_LIMITED_UNTIL, _LAST_KEY
+    # if key changed since last 429, clear the quota window so new key is tried immediately
+    try:
+        from app.config.settings import settings as _s
+        _k = (_s.llm_api_key or "").strip()
+    except Exception:
+        _k = ""
+    _cur = (os.getenv("LLM_API_KEY") or _k or "").strip()
+    if _cur and _cur != _LAST_KEY:
+        _LAST_KEY = _cur
+        _RATE_LIMITED_UNTIL = 0
+    if _RATE_LIMITED_UNTIL > time.time():
+        return None  # quota window - use deterministic fallbacks, no LLM call
     # Load via settings (pydantic loads backend/.env) with os.getenv fallback
     try:
         from app.config.settings import settings as _s
@@ -45,10 +65,10 @@ def get_llm():
 
     if provider == "groq":
         from langchain_groq import ChatGroq
-        return ChatGroq(model=model, temperature=0, api_key=key)  # type: ignore
+        return ChatGroq(model=model, temperature=0, api_key=key, max_retries=1)  # type: ignore
     elif provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=key)  # type: ignore
+        return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=key, max_retries=1)  # type: ignore
     else:
         from langchain_openai import ChatOpenAI
         # also supports Groq via OpenAI-compatible base_url if user prefers openai provider + groq key
@@ -344,14 +364,44 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
         f"Agent Evidence:\n{results_str}\n\n"
         f"Synthesize this evidence into a final response. RULES: plain text only, NO markdown (no **, no ###, no * bullets, no - bullets), use numbered lines 1. 2. 3. if listing. Keep language same as user query (English/Marathi). Be concise and understandable. If route_live is present, use its distance_km and coordinates exactly — do not estimate distances. If wind/wave/sst values are present, use them verbatim."
     )
+    # Fast-path when we know quota is exhausted - skip the 56s retry entirely
+    if _RATE_LIMITED_UNTIL > time.time():
+        evidence_lines = []
+        if "route_live" in results:
+            rl = results["route_live"]
+            evidence_lines.append(f"Route {rl.get('start')} → {rl.get('end')} — {rl.get('distance_km')} km (live, safety-checked).")
+        try:
+            import psycopg as _psycopg
+            from app.database.connection import psycopg_conninfo
+            conn = _psycopg.connect(psycopg_conninfo())
+            cur = conn.cursor()
+            cur.execute("SELECT wind_speed FROM weather_observations ORDER BY observation_time DESC LIMIT 1")
+            w = cur.fetchone()
+            cur.execute("SELECT wave_height FROM ocean_observations ORDER BY observation_time DESC LIMIT 1")
+            o = cur.fetchone()
+            conn.close()
+            if w and w[0] is not None:
+                evidence_lines.append(f"Wind {float(w[0]):.1f} m/s, Wave {float(o[0]):.1f} m" if o and o[0] is not None else f"Wind {float(w[0]):.1f} m/s")
+        except Exception:
+            pass
+        fallback = (
+            "ORCA — live evidence (LLM quota exhausted today, showing deterministic live summary — no estimate):\n"
+            + "\n".join(f"{i+1}. {l}" for i, l in enumerate(evidence_lines[:8])) + "\n"
+            + f"Full evidence: {results_str[:1400]}\n"
+            + "Note: LLM quota window — using live data fallback. Map route is still live. Will auto-resume LLM after ~1h."
+        )
+        return {"final_response": fallback}
     try:
-        response = await llm.ainvoke(prompt)
+        response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=15)
     except Exception as e:
         # Graceful fallback for quota/rate-limit (e.g. Gemini free 20/day) — never 500
         msg = str(e)
-        is_rate = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower() or "rate" in msg.lower()
+        is_rate = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower() or "rate" in msg.lower() or isinstance(e, asyncio.TimeoutError)
         if is_rate:
             log.warning("llm_rate_limited_fallback_to_evidence", error=msg[:200])
+            # remember quota window for ~1 hour to avoid 56s retries on next chats
+            import time as _t
+            globals()["_RATE_LIMITED_UNTIL"] = _t.time() + 3600
             evidence_lines = []
             if "route_live" in results:
                 rl = results["route_live"]
