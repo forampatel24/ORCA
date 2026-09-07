@@ -43,16 +43,29 @@ export function ChlorophyllChart() {
   const [chl, setChl] = useState<number[]>([])
   useEffect(() => {
     const fetchChl = async () => {
+      // Real Copernicus NRT chlorophyll first - no flat mock fallback
+      try {
+        const res = await api.get('/ocean/chlorophyll-history', { params: { latitude: 19.076, longitude: 72.877 } })
+        const items = res.data.items || []
+        if (items.length) {
+          setDates(items.map((r: any) => new Date(r.observation_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })))
+          setChl(items.map((r: any) => r.chlorophyll))
+          return
+        }
+      } catch { /* fall through to DB series */ }
       try {
         const token = localStorage.getItem('orca_token')
         const headers: any = token ? { Authorization: 'Bearer ' + token } : {}
         const res = await api.get('/ocean/history', { params: { latitude: 19.076, longitude: 72.877, limit: 7 }, headers })
-        const items = res.data.items || []
-        const labels = items.map((r:any) => new Date(r.observation_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}))
-        const vals = items.map((r:any) => r.chlorophyll ?? 0.14)
-        setDates(labels); setChl(vals)
+        const items = (res.data.items || []).filter((r: any) => r.chlorophyll != null)
+        if (items.length) {
+          setDates(items.map((r: any) => new Date(r.observation_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })))
+          setChl(items.map((r: any) => r.chlorophyll))
+          return
+        }
+        setDates([]); setChl([])
       } catch {
-        setDates(['01 Sep','07 Sep']); setChl([0.14,0.14])
+        setDates([]); setChl([])
       }
     }
     fetchChl()

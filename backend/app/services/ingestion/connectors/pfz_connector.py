@@ -85,6 +85,59 @@ def parse_sectext(home_html: str, detail_html: str) -> Dict[str, Any]:
         })
     return {"forecast": forecast, "valid_upto": valid_upto, "rows": rows}
 
+_CHL_GRID = {"mtime": 0, "lats": None, "lons": None, "vals": None, "tdate": None}
+
+
+def _chl_grid_load():
+    """Load fresh Copernicus chl grid if present (cached by file mtime)."""
+    import os as _os
+    from pathlib import Path as _Path
+    candidates = [
+        _Path(__file__).resolve().parents[5] / "data" / "raw_copernicus" / "mumbai_chl_fresh.nc",
+        _Path(r"D:\Foram_TP\ORCA\data\raw_copernicus\mumbai_chl_fresh.nc"),
+    ]
+    for fp in candidates:
+        try:
+            if not fp.exists():
+                continue
+            mt = fp.stat().st_mtime
+            if _CHL_GRID["vals"] is not None and _CHL_GRID["mtime"] == mt:
+                return _CHL_GRID
+            import xarray as _xr
+            ds = _xr.open_dataset(str(fp))
+            arr = ds["chl"]
+            if "depth" in arr.dims:
+                arr = arr.isel(depth=0)
+            arr = arr.isel(time=-1)
+            _CHL_GRID.update({"mtime": mt, "lats": ds.latitude.values,
+                              "lons": ds.longitude.values, "vals": arr.values,
+                              "tdate": str(ds.time.values[-1])[:10]})
+            ds.close()
+            return _CHL_GRID
+        except Exception as e:
+            log.warning("pfz_chl_grid_load_failed", error=str(e))
+    return None
+
+
+def _nearest_chl(lat: float, lon: float):
+    """Real chl from fresh Copernicus grid, nearest 0.25deg cell. None if unavailable."""
+    g = _chl_grid_load()
+    if not g or g["vals"] is None:
+        return None, None
+    try:
+        import numpy as _np
+        i = int(_np.argmin(_np.abs(g["lats"] - lat)))
+        j = int(_np.argmin(_np.abs(g["lons"] - lon)))
+        v = g["vals"][i, j]
+        if v is None or (isinstance(v, float) and _np.isnan(v)):
+            v = float(_np.nanmean(g["vals"][max(0, i - 1):i + 2, max(0, j - 1):j + 2]))
+        if v is None or (isinstance(v, float) and _np.isnan(v)):
+            return None, None
+        return round(float(v), 4), g["tdate"]
+    except Exception:
+        return None, None
+
+
 async def _point_sst(client: "httpx.AsyncClient", lat: float, lon: float):
     """Actual SST at this exact coordinate from Open-Meteo Marine (current).
 
@@ -161,6 +214,7 @@ class PFZConnector(BaseConnector):
                         return sst, stime
                     sst_vals = await _aio.gather(*[_enrich(row) for row in rows])
                     for row, (sst, stime) in zip(rows, sst_vals):
+                        chl, chldate = _nearest_chl(row["latitude"], row["longitude"])
                         in_mumbai = (use_bbox[1] <= row["latitude"] <= use_bbox[3]
                                      and use_bbox[0] <= row["longitude"] <= use_bbox[2])
                         if not include_outside_bbox and not in_mumbai:
@@ -191,8 +245,9 @@ class PFZConnector(BaseConnector):
                                 "sst_source": "open-meteo_marine_at_point" if sst is not None else None,
                                 "sst_time": stime,
                                 "sst_note": "measured at this PFZ coordinate, not a station copy" if sst is not None else "point query failed",
-                                "chlorophyll": None,
-                                "chlorophyll_note": "INCOIS text has no chl column; live chl needs Copernicus/MOSDAC",
+                                "chlorophyll": chl,
+                                "chlorophyll_source": f"copernicus_bgc-pft_anfc_Mumbai_{chldate}" if chl is not None else None,
+                                "chlorophyll_note": "nearest 0.25deg fresh-grid cell to PFZ point" if chl is not None else "fresh chl grid unavailable; needs Copernicus/MOSDAC",
                             },
                         })
                     if out:

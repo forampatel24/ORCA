@@ -18,6 +18,15 @@ async def ocean_history(latitude: float, longitude: float, limit: int = 7):
     conn.close()
     return {"items": [{"sst": r[0], "chlorophyll": r[1], "wave_height": r[2], "observation_time": r[3].isoformat() if r[3] else None} for r in rows]}
 
+@router.get("/chlorophyll-history")
+async def chlorophyll_history(latitude: float, longitude: float):
+    # Public read. Real daily chlorophyll from the fresh Copernicus NRT grid
+    # (bgc-pft_anfc, 0.25deg), nearest cell to the point. No mock fallback.
+    from app.services.copernicus_store import chl_series
+    items = chl_series(latitude, longitude)
+    return {"items": items, "count": len(items),
+            "source": "copernicus_bgc-pft_anfc Mumbai 01-07 Sep 2026, nearest 0.25deg cell"}
+
 @router.get("/grid")
 async def ocean_grid(bbox: str = Query(default="72.2,18.5,73.2,19.5")):
     """Real Copernicus gridded per-pixel values — thetao/sst, so, uo, vo, current_speed, chlorophyll. Water only (land NaN masked)."""
