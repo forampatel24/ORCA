@@ -13,6 +13,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 })
 
+function VesselDraggable() {
+  const { userPos, setUserPos } = useMapStore()
+  if (!userPos) return null
+  return (
+    // @ts-ignore
+    <Marker position={[userPos[1], userPos[0]] as any} draggable icon={L.divIcon({ className: "", html: `<div style="width:18px;height:18px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 8px #000;display:flex;align-items:center;justify-content:center"><span style="font-size:10px">🚢</span></div>`, iconSize: [18, 18] as any, iconAnchor: [9, 9] as any }) as any}
+      eventHandlers={{ dragend: (e: any) => { const ll = e.target.getLatLng(); setUserPos([ll.lng, ll.lat]) } }}>
+      <Popup><div style={{ color: "#0f172a", fontSize: 11 }}>Entered vessel position<br/>{userPos[1].toFixed(3)}, {userPos[0].toFixed(3)}<br/><small>Drag to move</small></div></Popup>
+    </Marker>
+  )
+}
+
 function FlyTo({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
@@ -50,6 +62,14 @@ export default function LeafletMap() {
   const [windTime, setWindTime] = useState<string>("")
   const [lightning, setLightning] = useState<any>(null) // lightning strikes + CAPE
   const [tides, setTides] = useState<any>(null) // harmonic tide extremes
+  const [safeRoute, setSafeRoute] = useState<any>(null) // green dashed safe navigation
+
+  useEffect(() => {
+    const h = (e: any) => setSafeRoute(e.detail || null)
+    window.addEventListener("orca-safe-route" as any, h)
+    if ((window as any).__orca_safe_route) setSafeRoute((window as any).__orca_safe_route)
+    return () => window.removeEventListener("orca-safe-route" as any, h)
+  }, [])
 
   useEffect(() => {
     fetch("/india_states.geojson")
@@ -230,6 +250,13 @@ export default function LeafletMap() {
         {activeSub === "lightning" && lightning?.strikes?.map((s: any, i: number) => ( // @ts-ignore
           <Marker key={"lit" + i} position={[s.lat, s.lon] as any} icon={L.divIcon({ className: "", html: `<div style="font-size:16px;filter:drop-shadow(0 1px 2px #000)">⚡</div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any} />
         ))}
+        {/* Safe navigation route - green dashed line back to safety, always visible when active */}
+        {safeRoute?.coordinates && ( // @ts-ignore
+          <Polyline positions={safeRoute.coordinates.map((c: any) => [c[1], c[0]]) as any} pathOptions={{ color: "#22c55e", weight: 4, dashArray: "10 8", opacity: 0.95 } as any} />
+        )}
+        {safeRoute?.coordinates && safeRoute.coordinates.map((c: any, i: number) => i === 0 ? null : ( // @ts-ignore
+          <Marker key={"safe-pt" + i} position={[c[1], c[0]] as any} icon={L.divIcon({ className: "", html: `<div style="background:#22c55e;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px #000">SAFE • ${safeRoute.distance_km?.toFixed(1)} km</div>`, iconSize: [70, 20] as any, iconAnchor: [35, 10] as any }) as any} />
+        ))}
         {/* Sea — tide strip: next high/lows as timeline (real harmonic, no mock) */}
         {activeSub === "sea" && tideList.length > 0 && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-700 rounded px-3 py-2 text-[11px] text-slate-200 z-[400] backdrop-blur flex gap-3 items-center">
@@ -252,6 +279,7 @@ export default function LeafletMap() {
         {shouldShowMpa && mumbaiMpa && mumbaiMpa.features?.length > 0 && ( // @ts-ignore
           <RLGeoJSON data={mumbaiMpa} style={{ color: "#f43f5e", weight: 2, dashArray: "4 4", fillColor: "#f43f5e", fillOpacity: 0.15 } as any} onEachFeature={(f: any, l: any) => l.bindPopup(`<b>${f.properties?.name}</b><br/>${f.properties?.authority || ""}`)} />
         )}
+        <VesselDraggable />
         {activeSub === "vessel" && vessels.map((v: any) => ( // @ts-ignore
           <Marker key={v.id} position={[v.latitude, v.longitude] as any} icon={L.divIcon({ className: "", html: `<div style="width:16px;height:16px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 0 6px #000;position:relative"><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:600">${(v.vessel_name || "VESSEL").slice(0, 18)}</div></div>`, iconSize: [16, 16] as any, iconAnchor: [8, 8] as any }) as any}><Popup><div style={{ color: "#0f172a", minWidth: 170 }}><b>{v.vessel_name || "Unknown vessel"}</b><br/><small>{v.event_type || "fishing"} • {v.observation_time?.slice(0, 10)}</small><br/><small>{v.latitude?.toFixed(3)}°N, {v.longitude?.toFixed(3)}°E</small><br/><small>Source: GFW v3 events</small></div></Popup></Marker>
         ))}

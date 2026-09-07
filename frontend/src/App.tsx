@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import ChatPanel from "./components/chat/ChatPanel"
 import LeafletMap from "./components/map/LeafletMap"
+import VesselPositionBar from "./components/map/VesselPositionBar"
 import VisualizationSidebar from "./components/viz/VisualizationSidebar"
 import { useVizStore } from "./stores/vizStore"
 import { useMapStore } from "./stores/mapStore"
@@ -109,6 +110,7 @@ function Dashboard() {
 
         {/* Center — Map */}
         <div className="flex-1 min-w-0 flex flex-col bg-slate-950 p-3 gap-3">
+          <VesselPositionBar />
           <div className="flex-1 min-h-[420px] relative flex flex-col">
             <div className="flex justify-between items-center mb-2 gap-2">
               <div className="text-xs text-slate-400">
