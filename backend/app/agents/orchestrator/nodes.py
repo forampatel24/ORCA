@@ -265,6 +265,68 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
     """Generates final response. No mock synthesis - honest structured evidence when LLM unavailable."""
     llm = get_llm()
     results = state.get("agent_results", {})
+    # --- Live route injection for Marathi + English: ensure LLM never estimates distance ---
+    try:
+        ql = (state.get("user_query") or "").lower()
+        is_route = any(k in ql for k in ["route", "मार्ग", "रूट", "रस्ता", "पासून", "पर्यंत"])
+        # also "from X to Y" pattern
+        if not is_route and " from " in ql and " to " in ql:
+            is_route = True
+        if is_route and "route_live" not in results:
+            # Try to resolve two PFZ names (English or Devanagari) from the query
+            DEV_TO_EN = {"एडावण": "Edavan/Kore", "कोरे": "Edavan/Kore", "पटवाडी": "Patwadi", "अरनाळा": "Arnala", "आर्णाला": "Arnala", "टेंभी": "Tembhi", "मलबार": "Malabar Port (Mumbai)", "वरळी": "Worli", "ससून": "SasoonDock", "कालबादेवी": "Kalbadevi", "चिंचबंदर": "Chinchbunder", "ससवणे": "Sasawane", "कोलाबा": "Colaba Pt.(Mumbai)", "नवगाव": "Navgaon", "थाळ": "Thal", "वरसोली": "VarsoliChalmala", "अलिबाग": "Alibag", "नागाव": "Nagaon", "रेवदंडा": "Revadanda", "कोर्लई": "Korlai"}
+            # collect Devanagari hits
+            dev_hits = [en for dev, en in DEV_TO_EN.items() if dev in state.get("user_query", "")]
+            # also English PFZ hits via DB names
+            try:
+                import psycopg as _psycopg
+                from app.database.connection import psycopg_conninfo
+                conn = _psycopg.connect(psycopg_conninfo())
+                cur = conn.cursor()
+                cur.execute("SELECT metadata->>'landing_centre' FROM pfz_observations")
+                all_names = [r[0] for r in cur.fetchall() if r[0]]
+                conn.close()
+                # token match for English
+                for n in all_names:
+                    toks = [t for t in n.lower().split("/") if len(t) >= 3] + [n.lower()]
+                    if any(t in ql for t in toks) and n not in dev_hits:
+                        dev_hits.append(n)
+            except Exception:
+                pass
+            if len(dev_hits) >= 2:
+                # compute live route for LLM evidence
+                try:
+                    from app.api.routes.routes import _resolve_pfz, _safe_polyline
+                    from app.analytics.routing.engine import haversine
+                    a = _resolve_pfz(dev_hits[0]); b = _resolve_pfz(dev_hits[1])
+                    if a and b:
+                        coords = _safe_polyline(a[0], a[1], b[0], b[1])
+                        dist = sum(haversine(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]) for i in range(len(coords)-1))
+                        results["route_live"] = {"start": dev_hits[0], "end": dev_hits[1], "start_lat": a[0], "start_lon": a[1], "end_lat": b[0], "end_lon": b[1], "distance_km": round(dist, 2), "coordinates": coords, "safety": "hazards/MPA/EEZ checked via _safe_polyline, no estimate"}
+                except Exception as e:
+                    results["route_live_error"] = str(e)[:200]
+            elif len(dev_hits) == 1:
+                # single PFZ route from vessel/Mumbai default - still provide distance
+                try:
+                    from app.api.routes.routes import _resolve_pfz, _safe_polyline
+                    from app.analytics.routing.engine import haversine
+                    b = _resolve_pfz(dev_hits[0])
+                    if b:
+                        a_lat, a_lon = 19.076, 72.877
+                        # try vessel position from state if available
+                        try:
+                            vp = state.get("user_location") or state.get("vessel_pos")
+                            if vp and len(vp) == 2:
+                                a_lat, a_lon = float(vp[0]), float(vp[1])
+                        except Exception:
+                            pass
+                        coords = _safe_polyline(a_lat, a_lon, b[0], b[1])
+                        dist = sum(haversine(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]) for i in range(len(coords)-1))
+                        results["route_live"] = {"start": f"{a_lat},{a_lon}", "end": dev_hits[0], "distance_km": round(dist, 2), "coordinates": coords}
+                except Exception:
+                    pass
+    except Exception:
+        pass
     if llm is None:
         # No LLM key configured - do not fabricate natural language. Return deterministic
         # evidence summary with explicit provenance so the UI can show honest state.
@@ -280,9 +342,44 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
         f"You are ORCA, an Agentic Marine Intelligence Platform.\n"
         f"User Query: {state['user_query']}\n"
         f"Agent Evidence:\n{results_str}\n\n"
-        f"Synthesize this evidence into a final response. RULES: plain text only, NO markdown (no **, no ###, no * bullets, no - bullets), use numbered lines 1. 2. 3. if listing. Keep language same as user query (English/Marathi). Be concise and understandable."
+        f"Synthesize this evidence into a final response. RULES: plain text only, NO markdown (no **, no ###, no * bullets, no - bullets), use numbered lines 1. 2. 3. if listing. Keep language same as user query (English/Marathi). Be concise and understandable. If route_live is present, use its distance_km and coordinates exactly — do not estimate distances. If wind/wave/sst values are present, use them verbatim."
     )
-    response = await llm.ainvoke(prompt)
+    try:
+        response = await llm.ainvoke(prompt)
+    except Exception as e:
+        # Graceful fallback for quota/rate-limit (e.g. Gemini free 20/day) — never 500
+        msg = str(e)
+        is_rate = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower() or "rate" in msg.lower()
+        if is_rate:
+            log.warning("llm_rate_limited_fallback_to_evidence", error=msg[:200])
+            evidence_lines = []
+            if "route_live" in results:
+                rl = results["route_live"]
+                evidence_lines.append(f"Route {rl.get('start')} → {rl.get('end')} — {rl.get('distance_km')} km (live, safety-checked).")
+            # include key live values for user
+            try:
+                import psycopg as _psycopg
+                from app.database.connection import psycopg_conninfo
+                conn = _psycopg.connect(psycopg_conninfo())
+                cur = conn.cursor()
+                cur.execute("SELECT wind_speed FROM weather_observations ORDER BY observation_time DESC LIMIT 1")
+                w = cur.fetchone()
+                cur.execute("SELECT wave_height FROM ocean_observations ORDER BY observation_time DESC LIMIT 1")
+                o = cur.fetchone()
+                conn.close()
+                if w and w[0] is not None:
+                    evidence_lines.append(f"Wind {float(w[0]):.1f} m/s, Wave {float(o[0]):.1f} m" if o and o[0] is not None else f"Wind {float(w[0]):.1f} m/s")
+            except Exception:
+                pass
+            fallback = (
+                "ORCA — live evidence (LLM quota exceeded, showing deterministic summary — no estimate):\n"
+                + "\n".join(f"{i+1}. {l}" for i, l in enumerate(evidence_lines[:8])) + "\n"
+                + f"Full evidence: {results_str[:1400]}\n"
+                + "Note: Gemini free tier 20/day reached — retry in ~60s or set GROQ_API_KEY for higher limits. Map route is still live."
+            )
+            return {"final_response": fallback}
+        raise
+    content = response.content
     content = response.content
     # Google returns list of dicts, OpenAI/Groq return string — normalize to string
     if isinstance(content, list):
