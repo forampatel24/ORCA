@@ -115,13 +115,13 @@ function Dashboard() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0 items-stretch">
-        {/* Left — Chat */}
-        <div className="w-[380px] shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col self-stretch">
-          <div className="flex-1 min-h-0 p-2">
+      <div className="flex flex-1 min-h-0 items-start">
+        {/* Left — Chat — fixed viewport height, internal scroll only */}
+        <div className="w-[380px] shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col h-[calc(100vh-57px)] overflow-hidden sticky top-[57px] self-start">
+          <div className="flex-1 min-h-0 p-2 overflow-y-auto">
             <ChatPanel />
           </div>
-          <div className="border-t border-slate-800 p-3 bg-slate-900/50">
+          <div className="border-t border-slate-800 p-3 bg-slate-900/50 shrink-0 flex-none">
             <div className="text-xs font-semibold mb-1">Evidence Drawer</div>
             <div className="text-xs text-slate-400 whitespace-pre-wrap max-h-20 overflow-auto">
               {lastAssistant?.content?.slice(0, 380) || "No evidence yet — ask ORCA e.g. 'Is it safe near Mumbai tomorrow?'"}
@@ -130,11 +130,13 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Center — Map */}
-        <div className="flex-1 min-w-0 flex flex-col bg-slate-950 p-3 gap-3 self-stretch">
-          <VesselPositionBar />
-          <div className="flex-1 min-h-[420px] relative flex flex-col">
-            <div className="flex justify-between items-center mb-2 gap-2">
+        {/* Center — Map + Charts — fixed viewport height, internal scroll; map never stretches */}
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-950 p-3 gap-3 h-[calc(100vh-57px)] overflow-y-auto">
+          <div className="shrink-0 flex-none">
+            <VesselPositionBar />
+          </div>
+          <div className="h-[420px] flex-none shrink-0 relative flex flex-col">
+            <div className="flex justify-between items-center mb-2 gap-2 shrink-0">
               <div className="text-xs text-slate-400">
                 {activeSub ? (
                   <span>
@@ -155,14 +157,14 @@ function Dashboard() {
             </div>
             {/* Mobile info card */}
             {activeSub && (
-              <div className="md:hidden mt-2">
+              <div className="md:hidden mt-2 shrink-0">
                 <InfoCard activeSub={activeSub} />
               </div>
             )}
           </div>
 
           {/* Charts — only show for fishing/marine context */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 shrink-0 flex-none">
             <div className="border border-slate-800 rounded p-3 bg-slate-900">
               <div className="text-xs font-semibold mb-1">SST Trend (past 7 days to today)</div>
               <SstChart />
@@ -172,10 +174,14 @@ function Dashboard() {
               <ChlorophyllChart />
             </div>
           </div>
+          {/* Blue plain filler below graphs — extends to fill remaining height, map stays fixed at 420px */}
+          <div className="flex-1 min-h-[160px] bg-slate-950 shrink-0" />
         </div>
 
-        {/* Right — Sidebar */}
-        <VisualizationSidebar />
+        {/* Right — Sidebar — fixed viewport height */}
+        <div className="w-[320px] shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col h-[calc(100vh-57px)] overflow-hidden sticky top-[57px] self-start">
+          <VisualizationSidebar />
+        </div>
       </div>
     </div>
   )
