@@ -13,8 +13,12 @@ def _resolve_pfz(name: str):
     try:
         conn = psycopg.connect(psycopg_conninfo())
         cur = conn.cursor()
-        cur.execute("SELECT latitude, longitude, metadata->>'landing_centre' FROM pfz_observations WHERE metadata->>'landing_centre' ILIKE %s LIMIT 1", (f"%{name.strip()}%",))
+        # Prefer exact case-insensitive match first (so "Worli" -> Worli, not Worli-Lotus)
+        cur.execute("SELECT latitude, longitude, metadata->>'landing_centre' FROM pfz_observations WHERE lower(metadata->>'landing_centre') = lower(%s) LIMIT 1", (name.strip(),))
         row = cur.fetchone()
+        if not row:
+            cur.execute("SELECT latitude, longitude, metadata->>'landing_centre' FROM pfz_observations WHERE metadata->>'landing_centre' ILIKE %s ORDER BY length(metadata->>'landing_centre') ASC LIMIT 1", (f"%{name.strip()}%",))
+            row = cur.fetchone()
         conn.close()
         if row:
             return float(row[0]), float(row[1]), row[2]
@@ -140,10 +144,27 @@ async def calculate_route(
     if len(coords) > 2:
         dist = sum(haversine(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]) for i in range(len(coords)-1))
         dist = round(dist, 2)
+    # turn-by-turn instructions
+    instructions = []
+    for i in range(len(coords)-1):
+        lon1, lat1 = coords[i]
+        lon2, lat2 = coords[i+1]
+        seg = haversine(lat1, lon1, lat2, lon2)
+        y = math.sin(math.radians(lon2 - lon1)) * math.cos(math.radians(lat2))
+        x = math.cos(math.radians(lat1)) * math.sin(math.radians(lat2)) - math.sin(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.cos(math.radians(lon2 - lon1))
+        brng = (math.degrees(math.atan2(y, x)) + 360) % 360
+        dirs = ["N","NE","E","SE","S","SW","W","NW"]
+        bdir = dirs[round(brng/45) % 8]
+        instructions.append(f"Step {i+1}: Head {bdir} ({brng:.0f}°) for {seg:.1f} km — from {lat1:.3f},{lon1:.3f} to {lat2:.3f},{lon2:.3f}")
+    if g.get("inside_protected"):
+        instructions.append("Caution: destination inside Marine Protected Area — entry restricted. Keep 5 km buffer.")
+    elif g.get("inside_geofence"):
+        instructions.append("Caution: route enters restricted geofence — remain outside.")
+    instructions.append(f"Total {dist:.1f} km, est. {scored['time_h']:.1f}h at 20 km/h, risk {risk['risk_level']} ({risk['risk_score']}). Stay inside EEZ and monitor wind/wave.")
     return RouteResponse(routes=[
         RouteOption(route_id=f"live-{start_lat:.3f},{start_lon:.3f}-{end_lat:.3f},{end_lon:.3f}",
                     distance_km=dist, duration=f"{scored['time_h']:.1f}h",
                     risk_score=risk["risk_score"], geofence_violations=[g["inside_geofence"]] if g.get("inside_geofence") else [],
                     hazards=risk["risk_factors"],
-                    coordinates=coords, pfz_start=pfz_start, pfz_end=pfz_end)
+                    coordinates=coords, instructions=instructions, pfz_start=pfz_start, pfz_end=pfz_end)
     ])

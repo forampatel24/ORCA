@@ -272,7 +272,56 @@ async def execute_agents_node(state: OrcaState) -> OrcaState:
                     geofence=results.get("geospatial_agent")
                 )
             elif agent_name == "routing_agent":
-                results[agent_name] = await agent.run(origin={"lat": lat, "lon": lon}, destination={"lat": 19.1, "lon": 72.5})
+                # Use live PFZ names from query when available, not hardcoded 19.1,72.5 — any of the 21, exact match preferred (Worli vs Worli-Lotus)
+                dest_lat, dest_lon = 19.1, 72.5
+                ql = (state.get("user_query") or "").lower()
+                try:
+                    from app.api.routes.routes import _resolve_pfz
+                    import psycopg as _psycopg
+                    from app.database.connection import psycopg_conninfo
+                    conn = _psycopg.connect(psycopg_conninfo())
+                    cur = conn.cursor()
+                    cur.execute("SELECT metadata->>'landing_centre' FROM pfz_observations")
+                    all_names = [r[0] for r in cur.fetchall() if r[0]]
+                    conn.close()
+                    best = None; best_idx = 10**9; best_whole = False; best_len = 10**9
+                    for n in all_names:
+                        low = n.lower()
+                        whole_idx = ql.find(low)
+                        toks = [t for t in low.split("/") if len(t) >= 3] + ([low] if low not in [t for t in low.split("/") if len(t) >=3] else [])
+                        # also split hyphen
+                        toks += [t for tok in low.split("/") for t in tok.split("-") if len(t) >= 3 and t not in toks]
+                        cur_idx = whole_idx if whole_idx != -1 else 10**9
+                        cur_whole = whole_idx != -1
+                        if not cur_whole:
+                            for tok in toks:
+                                idx = ql.find(tok)
+                                if idx != -1 and idx < cur_idx:
+                                    cur_idx = idx; cur_whole = False
+                        if cur_idx == 10**9:
+                            continue
+                        # prefer smaller idx, then whole-name, then shorter name
+                        if cur_idx < best_idx or (cur_idx == best_idx and cur_whole and not best_whole) or (cur_idx == best_idx and cur_whole == best_whole and len(n) < best_len):
+                            best = n; best_idx = cur_idx; best_whole = cur_whole; best_len = len(n)
+                    dev_map = {"एडावण": "Edavan/Kore", "कोरे": "Edavan/Kore", "पटवाडी": "Patwadi", "अरनाळा": "Arnala", "आर्णाला": "Arnala", "टेंभी": "Tembhi", "मलबार": "Malabar Port (Mumbai)", "वरळी": "Worli", "ससून": "SasoonDock", "कालबादेवी": "Kalbadevi", "चिंचबंदर": "Chinchbunder", "न्यू फेरी": "NewFerryWharf", "ससवणे": "Sasawane", "कोलाबा": "Colaba Pt.(Mumbai)", "नवगाव": "Navgaon", "थाळ": "Thal", "वरसोली": "VarsoliChalmala", "अलिबाग": "Alibag", "नागाव": "Nagaon", "रेवदंडा": "Revadanda", "कोर्लई": "Korlai", "मालवण": "Malvan Marine Sanctuary Maharashtra"}
+                    for dev, en in dev_map.items():
+                        if dev in (state.get("user_query") or ""):
+                            best = en; break
+                    if best:
+                        r = _resolve_pfz(best)
+                        if r:
+                            dest_lat, dest_lon = r[0], r[1]
+                except Exception:
+                    pass
+                # origin is vessel position if provided in state, else Mumbai default
+                orig_lat, orig_lon = lat, lon
+                try:
+                    vp = state.get("user_location") or state.get("vessel_pos")
+                    if vp and len(vp) == 2:
+                        orig_lat, orig_lon = float(vp[0]), float(vp[1])
+                except Exception:
+                    pass
+                results[agent_name] = await agent.run(origin={"lat": orig_lat, "lon": orig_lon}, destination={"lat": dest_lat, "lon": dest_lon})
             elif agent_name == "rag_agent":
                 results[agent_name] = await agent.run(query=state.get("user_query", ""))
             else:
@@ -348,8 +397,16 @@ async def synthesize_node(state: OrcaState) -> OrcaState:
     except Exception:
         pass
     if llm is None:
-        # No LLM key configured - do not fabricate natural language. Return deterministic
-        # evidence summary with explicit provenance so the UI can show honest state.
+        # No LLM key or quota window — return deterministic live summary, but make route nice
+        if "route_live" in results:
+            rl = results["route_live"]
+            return {"final_response": (
+                f"ORCA — live route (LLM not configured — deterministic, no estimate):\n"
+                f"1. Route {rl.get('start')} → {rl.get('end')} — {rl.get('distance_km')} km (live, safety-checked via hazards/MPA/EEZ).\n"
+                f"2. Wind {results.get('weather_agent',{}).get('weather',{}).get('wind_speed','?')} m/s, Wave {results.get('marine_agent',{}).get('ocean',{}).get('wave_height','?') if isinstance(results.get('marine_agent'), dict) else '?'} m\n"
+                f"Full evidence: {json.dumps(results, indent=2)[:1400]}\n"
+                f"Map route is live — green dashed line."
+            )}
         return {"final_response": (
             "ORCA evidence summary (LLM not configured - live data only, no mock synthesis):\n"
             f"Query: {state['user_query']}\n"

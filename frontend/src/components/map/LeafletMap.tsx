@@ -74,6 +74,7 @@ export default function LeafletMap() {
   const [lightning, setLightning] = useState<any>(null) // lightning strikes + CAPE
   const [tides, setTides] = useState<any>(null) // harmonic tide extremes
   const [safeRoute, setSafeRoute] = useState<any>(null) // green dashed safe navigation
+  const [routeInstructions, setRouteInstructions] = useState<string[]>([])
 
   useEffect(() => {
     const h = (e: any) => setSafeRoute(e.detail || null)
@@ -87,6 +88,13 @@ export default function LeafletMap() {
     window.addEventListener("orca-chat-route" as any, h)
     if ((window as any).__orca_chat_route) setRouteLine((window as any).__orca_chat_route as any)
     return () => window.removeEventListener("orca-chat-route" as any, h)
+  }, [])
+
+  useEffect(() => {
+    const h = (e: any) => setRouteInstructions(e.detail || [])
+    window.addEventListener("orca-chat-instructions" as any, h)
+    if ((window as any).__orca_chat_instructions) setRouteInstructions((window as any).__orca_chat_instructions as any)
+    return () => window.removeEventListener("orca-chat-instructions" as any, h)
   }, [])
 
   useEffect(() => {
@@ -330,6 +338,20 @@ export default function LeafletMap() {
           <RLGeoJSON data={mumbaiMpa} style={{ color: "#f43f5e", weight: 2, dashArray: "4 4", fillColor: "#f43f5e", fillOpacity: 0.15 } as any} onEachFeature={(f: any, l: any) => l.bindPopup(`<b>${f.properties?.name}</b><br/>${f.properties?.authority || ""}`)} />
         )}
         <VesselDraggable />
+        {activeSub === "route" && routeLine.length > 1 && ( // @ts-ignore
+          <Polyline positions={routeLine as any} pathOptions={{ color: "#22c55e", weight: 4, dashArray: "8 8", opacity: 0.95 } as any} />
+        )}
+        {activeSub === "route" && routeLine.map((p, i) => ( // @ts-ignore
+          <Marker key={"route-pt" + i} position={p as any} icon={L.divIcon({ className: "", html: `<div style="width:10px;height:10px;background:${i === 0 ? "#22c55e" : i === routeLine.length - 1 ? "#f59e0b" : "white"};border:2px solid #0f172a;border-radius:50%"></div>`, iconSize: [10, 10] as any, iconAnchor: [5, 5] as any }) as any} />
+        ))}
+        {activeSub === "route" && routeInstructions.length > 0 && (
+          <div className="absolute bottom-3 left-3 right-3 z-[400] bg-slate-900/95 border border-emerald-700 rounded-lg p-3 text-xs backdrop-blur shadow-xl max-h-36 overflow-auto">
+            <div className="font-bold text-emerald-300 mb-1">🧭 How to travel — turn by turn</div>
+            {routeInstructions.map((ins: string, i: number) => (
+              <div key={i} className="text-slate-200 leading-tight py-0.5">• {ins}</div>
+            ))}
+          </div>
+        )}
         {activeSub === "route" && routeLine.length > 1 && ( // @ts-ignore
           <Polyline positions={routeLine as any} pathOptions={{ color: "#22c55e", weight: 4, dashArray: "8 8", opacity: 0.9 } as any} />
         )}

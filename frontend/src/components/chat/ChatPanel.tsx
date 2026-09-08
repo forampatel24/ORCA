@@ -43,24 +43,19 @@ export default function ChatPanel() {
       const data = await chat(userMsg)
       let txt = (data.response||"").replace(/\*\*/g,"").replace(/###/g,"")
       addMessage({ role: 'assistant', content: txt, evidence: data.evidence, risk: data.risk })
-      // auto-open matching visualization (pfz/sst/wind etc.) on the map
       for (const [re, sub, cat] of VIZ_KEYWORDS) {
         if (re.test(userMsg)) { setActiveCategory(cat as any); setActiveSub(sub as any); break }
       }
-      // map sync — use backend-provided center (from data/location_coords.json via PostGIS) not hard-coded
       try {
         let lat=19.0, lon=72.8
         if (data.center && data.center.length===2) { lon=data.center[0]; lat=data.center[1] }
-        else if (data.location) {
-          lon=72.8; lat=19.0
-        }
+        else if (data.location) { lon=72.8; lat=19.0 }
         const pfzData = await getNearestPFZ(lat, lon, 150)
         if (pfzData.items?.length) {
           setSelected(pfzData.items[0])
           setCenter(data.center || [pfzData.items[0].longitude, pfzData.items[0].latitude])
         } else if (data.center) setCenter(data.center as any)
       } catch { if(data.center) setCenter(data.center as any) }
-      // route intent: show on map using LIVE backend route (no hallucinated distance) — map only, no second chat message
       try {
         const ql = userMsg.toLowerCase()
         const isRoute = ql.includes("route") || ql.includes("मार्ग") || ql.includes("रूट") || ql.includes("रस्ता") || (ql.includes(" from ") && ql.includes(" to ")) || (ql.includes("पासून") && (ql.includes("पर्यंत") || ql.includes("ते")))
@@ -69,8 +64,12 @@ export default function ChatPanel() {
           if (evRoute?.coordinates && evRoute.coordinates.length >= 2) {
             const latlngs = evRoute.coordinates.map((c: any) => [c[1], c[0]])
             ;(window as any).__orca_chat_route = latlngs
+            ;(window as any).__orca_chat_instructions = evRoute.instructions || []
             window.dispatchEvent(new CustomEvent("orca-chat-route", { detail: latlngs }))
+            window.dispatchEvent(new CustomEvent("orca-chat-instructions", { detail: evRoute.instructions || [] }))
             setActiveSub("route" as any)
+            const mid = latlngs[Math.floor(latlngs.length/2)]
+            setCenter([mid[1], mid[0]] as any)
           } else {
             let aName: string | null = null, bName: string | null = null
             const DEV_TO_EN: Record<string, string> = {
@@ -80,7 +79,7 @@ export default function ChatPanel() {
               "ससून": "SasoonDock", "कालबादेवी": "Kalbadevi", "चिंचबंदर": "Chinchbunder",
               "न्यू फेरी": "NewFerryWharf", "ससवणे": "Sasawane", "कोलाबा": "Colaba Pt.(Mumbai)",
               "नवगाव": "Navgaon", "थाळ": "Thal", "वरसोली": "VarsoliChalmala",
-              "अलिबाग": "Alibag", "नागाव": "Nagaon", "रेवदंडा": "Revadanda", "कोर्लई": "Korlai",
+              "अलिबाग": "Alibag", "नागाव": "Nagaon", "रेवदंडा": "Revadanda", "कोर्लई": "Korlai", "मालवण": "Malvan Marine Sanctuary Maharashtra",
             }
             try {
               const pfzRes = await api.get("/geospatial/pfz?bbox=71.8,15.5,74.5,20.5")
@@ -88,21 +87,56 @@ export default function ChatPanel() {
               const names = feats.map((f: any) => f.properties?.metadata?.landing_centre).filter(Boolean) as string[]
               const devHits: string[] = []
               for (const [dev, en] of Object.entries(DEV_TO_EN)) { if (userMsg.includes(dev) && !devHits.includes(en)) devHits.push(en) }
-              let found: string[] = []
-              if (devHits.length) found = devHits
-              else {
-                const scored = names.map((n) => {
-                  const toks = n.toLowerCase().split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3)
-                  let bestIdx = Infinity
-                  for (const t of toks) { const idx = ql.indexOf(t); if (idx !== -1 && idx < bestIdx) bestIdx = idx }
-                  const wholeIdx = ql.indexOf(n.toLowerCase())
-                  if (wholeIdx !== -1 && wholeIdx < bestIdx) bestIdx = wholeIdx
-                  return { n, idx: bestIdx }
-                }).filter((x: any) => x.idx !== Infinity).sort((a: any, b: any) => a.idx - b.idx)
-                found = scored.map((x: any) => x.n)
+              if (devHits.length >= 2) { aName = devHits[0]; bName = devHits[1] }
+              else if (devHits.length === 1) {
+                aName = devHits[0]
+                // need second PFZ from English part after "to"
+                const toIdx = Math.max(ql.indexOf(" to "), ql.indexOf(" ते "), ql.indexOf(" पर्यंत "))
+                const afterTo = toIdx !== -1 ? ql.substring(toIdx + 4) : ""
+                if (afterTo) {
+                  for (const n of names) {
+                    const low = n.toLowerCase()
+                    if (afterTo.includes(low) || low.split(/[^a-z0-9]+/).some(t => t.length>=3 && afterTo.includes(t))) { bName = n; break }
+                  }
+                }
+              } else {
+                // English: split into from-part and to-part to avoid Worli vs Worli-Lotus clash at same idx
+                const toIdx = ql.indexOf(" to ")
+                const fromPart = toIdx !== -1 ? ql.substring(0, toIdx) : ql
+                const toPart = toIdx !== -1 ? ql.substring(toIdx + 4) : ""
+                const scorePart = (part: string) => {
+                  let best: string | null = null, bestIdx = Infinity, bestWhole = false
+                  for (const n of names) {
+                    const low = n.toLowerCase()
+                    const wholeIdx = part.indexOf(low)
+                    let curIdx = wholeIdx !== -1 ? wholeIdx : Infinity
+                    let curWhole = wholeIdx !== -1
+                    if (!curWhole) {
+                      const toks = low.split(/[^a-z0-9]+/).filter(t=>t.length>=3)
+                      for (const t of toks) { const idx = part.indexOf(t); if (idx!==-1 && idx < curIdx) { curIdx = idx; curWhole = false } }
+                    }
+                    if (curIdx!==Infinity && (curIdx < bestIdx || (curIdx===bestIdx && curWhole && !best)) ) { best = n; bestIdx = curIdx; bestWhole = curWhole }
+                  }
+                  return best
+                }
+                if (toIdx !== -1) {
+                  aName = scorePart(fromPart)
+                  bName = scorePart(toPart)
+                } else {
+                  // no explicit from/to, pick two earliest distinct PFZs in query, deduped by position
+                  const scored = names.map(n => {
+                    const low=n.toLowerCase()
+                    const wholeIdx=ql.indexOf(low)
+                    let bIdx=wholeIdx!==-1?wholeIdx:Infinity
+                    let isW=wholeIdx!==-1
+                    if(!isW){ const toks=low.split(/[^a-z0-9]+/).filter(t=>t.length>=3); for(const t of toks){const idx=ql.indexOf(t); if(idx!==-1 && idx<bIdx){bIdx=idx}} }
+                    return {n, idx:bIdx, isWhole:isW, len:n.length}
+                  }).filter(x=>x.idx!==Infinity).sort((a,b)=>a.idx-b.idx || (b.isWhole as any)-(a.isWhole as any) || a.len-b.len)
+                  const uniq: string[]=[]; const seen=new Set<number>()
+                  for(const s of scored){ if(!seen.has(s.idx)){ uniq.push(s.n); seen.add(s.idx)} }
+                  if(uniq.length>=2){ aName=uniq[0]; bName=uniq[1] } else if(uniq.length===1){ aName=uniq[0] }
+                }
               }
-              if (found.length >= 2) { aName = found[0]; bName = found[1] }
-              else if (found.length === 1) { aName = found[0] }
             } catch {}
             if (aName || bName) {
               const params: any = {}
@@ -112,16 +146,20 @@ export default function ChatPanel() {
                 const vp = (useMapStore.getState() as any).userPos
                 if (vp) { params.start_lat = vp[1]; params.start_lon = vp[0] } else { params.start_lat = 19.076; params.start_lon = 72.877 }
               }
-              if (!params.end_name && !bName) {
-                // single PFZ case already handled above, nothing to do
-              } else {
-                const r = await api.post("/routes/calculate", null, { params })
-                const coords = r.data.routes?.[0]?.coordinates
-                if (coords && coords.length >= 2) {
-                  const latlngs = coords.map((c: any) => [c[1], c[0]])
-                  ;(window as any).__orca_chat_route = latlngs
-                  window.dispatchEvent(new CustomEvent("orca-chat-route", { detail: latlngs }))
-                  setActiveSub("route" as any)
+              const r = await api.post("/routes/calculate", null, { params })
+              const route = r.data.routes?.[0]
+              const coords = route?.coordinates
+              if (coords && coords.length >= 2) {
+                const latlngs = coords.map((c: any) => [c[1], c[0]])
+                ;(window as any).__orca_chat_route = latlngs
+                ;(window as any).__orca_chat_instructions = route.instructions || []
+                window.dispatchEvent(new CustomEvent("orca-chat-route", { detail: latlngs }))
+                window.dispatchEvent(new CustomEvent("orca-chat-instructions", { detail: route.instructions || [] }))
+                setActiveSub("route" as any)
+                const mid = latlngs[Math.floor(latlngs.length/2)]
+                setCenter([mid[1], mid[0]] as any)
+                if (route.instructions && route.instructions.length) {
+                  addMessage({ role: 'assistant', content: `Navigation — ${route.pfz_start || aName || "start"} → ${route.pfz_end || bName || "end"} (${route.distance_km} km):\n` + route.instructions.join("\n") })
                 }
               }
             }

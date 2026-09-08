@@ -10,6 +10,7 @@ class RouteOption(BaseModel):
     geofence_violations: List[str]
     hazards: List[str]
     coordinates: Optional[List[List[float]]] = None  # [[lon,lat],...] safe polyline
+    instructions: Optional[List[str]] = None  # turn-by-turn e.g. "Head SW 232° for 12.3 km"
     pfz_start: Optional[str] = None
     pfz_end: Optional[str] = None
 
